@@ -150,34 +150,49 @@ export type Database = {
       }
       business_settings: {
         Row: {
+          birthday_automation_enabled: boolean | null
+          birthday_message_template: string | null
           business_name: string | null
           closing_time: string | null
           created_at: string | null
           id: string
           logo_url: string | null
           opening_time: string | null
+          rescue_automation_enabled: boolean | null
+          rescue_days_threshold: number | null
+          rescue_message_template: string | null
           updated_at: string | null
           user_id: string
           webhook_url: string | null
         }
         Insert: {
+          birthday_automation_enabled?: boolean | null
+          birthday_message_template?: string | null
           business_name?: string | null
           closing_time?: string | null
           created_at?: string | null
           id?: string
           logo_url?: string | null
           opening_time?: string | null
+          rescue_automation_enabled?: boolean | null
+          rescue_days_threshold?: number | null
+          rescue_message_template?: string | null
           updated_at?: string | null
           user_id: string
           webhook_url?: string | null
         }
         Update: {
+          birthday_automation_enabled?: boolean | null
+          birthday_message_template?: string | null
           business_name?: string | null
           closing_time?: string | null
           created_at?: string | null
           id?: string
           logo_url?: string | null
           opening_time?: string | null
+          rescue_automation_enabled?: boolean | null
+          rescue_days_threshold?: number | null
+          rescue_message_template?: string | null
           updated_at?: string | null
           user_id?: string
           webhook_url?: string | null
