@@ -78,7 +78,7 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-gold">BarberPro</span>
+              <span className="text-lg font-bold text-gold">BarberSoft</span>
               <span className="text-xs text-muted-foreground">Gestão de Barbearias</span>
             </div>
           )}
@@ -154,7 +154,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-1 flex-col overflow-hidden">
               <span className="truncate text-sm font-medium">Admin</span>
-              <span className="truncate text-xs text-muted-foreground">admin@barberpro.com</span>
+              <span className="truncate text-xs text-muted-foreground">admin@barbersoft.com</span>
             </div>
           )}
           {!collapsed && (

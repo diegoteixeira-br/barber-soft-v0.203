@@ -164,7 +164,7 @@ export default function Auth() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary glow-gold">
             <Scissors className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-gold">BarberPro</h1>
+          <h1 className="text-3xl font-bold text-gold">BarberSoft</h1>
           <p className="mt-1 text-muted-foreground">Gestão de Barbearias</p>
         </div>
 
@@ -328,7 +328,7 @@ export default function Auth() {
         </Card>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          © 2024 BarberPro. Todos os direitos reservados.
+          © 2024 BarberSoft. Todos os direitos reservados.
         </p>
       </div>
     </div>
