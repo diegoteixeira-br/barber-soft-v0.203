@@ -8,6 +8,7 @@ export interface Unit {
   address: string | null;
   phone: string | null;
   manager_name: string | null;
+  evolution_instance_name: string | null;
   user_id: string;
   company_id: string | null;
   created_at: string;
@@ -18,6 +19,7 @@ interface UnitFormData {
   address?: string;
   phone?: string;
   manager_name?: string;
+  evolution_instance_name?: string;
 }
 
 export function useUnits(companyId: string | null = null) {
@@ -73,7 +75,15 @@ export function useUnits(companyId: string | null = null) {
       toast({ title: "Unidade criada com sucesso!" });
     },
     onError: (error: Error) => {
-      toast({ title: "Erro ao criar unidade", description: error.message, variant: "destructive" });
+      if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
+        toast({ 
+          title: "Erro ao criar unidade", 
+          description: "Esse nome de instância já está sendo usado por outra unidade", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ title: "Erro ao criar unidade", description: error.message, variant: "destructive" });
+      }
     },
   });
 
@@ -94,7 +104,15 @@ export function useUnits(companyId: string | null = null) {
       toast({ title: "Unidade atualizada com sucesso!" });
     },
     onError: (error: Error) => {
-      toast({ title: "Erro ao atualizar unidade", description: error.message, variant: "destructive" });
+      if (error.message?.includes('unique') || error.message?.includes('duplicate')) {
+        toast({ 
+          title: "Erro ao atualizar unidade", 
+          description: "Esse nome de instância já está sendo usado por outra unidade", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ title: "Erro ao atualizar unidade", description: error.message, variant: "destructive" });
+      }
     },
   });
 

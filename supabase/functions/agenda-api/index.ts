@@ -35,44 +35,18 @@ serve(async (req) => {
     console.log('Agenda API called with action:', action);
     console.log('Request body:', JSON.stringify(body));
 
-    // Se instance_name for fornecido, buscar a empresa e unit_id por ele
+    // Se instance_name for fornecido, buscar a unidade diretamente por ele
     let resolvedUnitId = body.unit_id;
     let companyId = null;
     
     if (instance_name && !resolvedUnitId) {
-      console.log(`Looking up company by instance_name: ${instance_name}`);
+      console.log(`Looking up unit by instance_name: ${instance_name}`);
       
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('evolution_instance_name', instance_name)
-        .maybeSingle();
-      
-      if (companyError) {
-        console.error('Error looking up company:', companyError);
-        return new Response(
-          JSON.stringify({ success: false, error: 'Erro ao buscar empresa' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (!company) {
-        console.error(`Company not found for instance: ${instance_name}`);
-        return new Response(
-          JSON.stringify({ success: false, error: `Empresa não encontrada para a instância "${instance_name}"` }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      companyId = company.id;
-      console.log(`Found company: ${company.id}`);
-      
-      // Buscar a primeira unidade da empresa (ou a principal)
+      // Busca direto na tabela units pelo evolution_instance_name
       const { data: unit, error: unitError } = await supabase
         .from('units')
-        .select('id')
-        .eq('company_id', company.id)
-        .limit(1)
+        .select('id, company_id')
+        .eq('evolution_instance_name', instance_name)
         .maybeSingle();
       
       if (unitError) {
@@ -84,15 +58,16 @@ serve(async (req) => {
       }
       
       if (!unit) {
-        console.error(`Unit not found for company: ${company.id}`);
+        console.error(`Unit not found for instance: ${instance_name}`);
         return new Response(
-          JSON.stringify({ success: false, error: 'Nenhuma unidade encontrada para esta empresa' }),
+          JSON.stringify({ success: false, error: `Unidade não encontrada para a instância "${instance_name}"` }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
       resolvedUnitId = unit.id;
-      console.log(`Resolved unit_id: ${resolvedUnitId}`);
+      companyId = unit.company_id;
+      console.log(`Resolved unit_id: ${resolvedUnitId}, company_id: ${companyId}`);
     }
 
     // Passar o unit_id resolvido para os handlers

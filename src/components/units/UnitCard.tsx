@@ -1,6 +1,7 @@
-import { Building2, MapPin, Phone, User, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Building2, MapPin, Phone, User, MoreVertical, Pencil, Trash2, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +24,15 @@ export function UnitCard({ unit, onEdit, onDelete }: UnitCardProps) {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
             <Building2 className="h-5 w-5 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">{unit.name}</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">{unit.name}</h3>
+            {unit.evolution_instance_name && (
+              <Badge variant="secondary" className="mt-1 text-xs">
+                <MessageCircle className="mr-1 h-3 w-3" />
+                {unit.evolution_instance_name}
+              </Badge>
+            )}
+          </div>
         </div>
         
         <DropdownMenu>
