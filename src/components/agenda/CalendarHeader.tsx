@@ -1,9 +1,10 @@
-import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Barber } from "@/hooks/useBarbers";
+import { Toggle } from "@/components/ui/toggle";
 
 export type CalendarViewType = "day" | "week" | "month";
 
@@ -12,9 +13,11 @@ interface CalendarHeaderProps {
   view: CalendarViewType;
   barbers: Barber[];
   selectedBarberId: string | null;
+  showCancelled: boolean;
   onDateChange: (date: Date) => void;
   onViewChange: (view: CalendarViewType) => void;
   onBarberChange: (barberId: string | null) => void;
+  onShowCancelledChange: (show: boolean) => void;
   onNewAppointment: () => void;
   onQuickService: () => void;
   onRefresh?: () => void;
@@ -26,9 +29,11 @@ export function CalendarHeader({
   view,
   barbers,
   selectedBarberId,
+  showCancelled,
   onDateChange,
   onViewChange,
   onBarberChange,
+  onShowCancelledChange,
   onNewAppointment,
   onQuickService,
   onRefresh,
@@ -129,6 +134,18 @@ export function CalendarHeader({
             ))}
           </SelectContent>
         </Select>
+
+        <Toggle
+          pressed={showCancelled}
+          onPressedChange={onShowCancelledChange}
+          variant="outline"
+          size="sm"
+          title={showCancelled ? "Ocultar cancelados" : "Mostrar cancelados"}
+          className="gap-2"
+        >
+          {showCancelled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          <span className="hidden sm:inline">Cancelados</span>
+        </Toggle>
 
         <Button variant="outline" onClick={onQuickService}>
           <Zap className="h-4 w-4 mr-2" />
