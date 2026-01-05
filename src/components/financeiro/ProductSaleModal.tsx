@@ -24,16 +24,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductSales } from "@/hooks/useProductSales";
 import { useBarbers } from "@/hooks/useBarbers";
+import { useClients } from "@/hooks/useClients";
 import { useCurrentUnit } from "@/contexts/UnitContext";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
+import { ClientCombobox } from "@/components/clients/ClientCombobox";
+import { ClientFormModal } from "@/components/clients/ClientFormModal";
+import { useUnits } from "@/hooks/useUnits";
 
 const formSchema = z.object({
   product_id: z.string().min(1, "Selecione um produto"),
   barber_id: z.string().optional(),
   quantity: z.coerce.number().int().positive("Quantidade deve ser maior que zero"),
+  client_id: z.string().optional(),
   client_name: z.string().optional(),
   client_phone: z.string().optional(),
 });
@@ -50,6 +57,13 @@ export function ProductSaleModal({ open, onOpenChange }: ProductSaleModalProps) 
   const { products } = useProducts();
   const { createSale } = useProductSales();
   const { barbers } = useBarbers(currentUnitId);
+  const { clients, createClient, isLoading: isLoadingClients } = useClients();
+  const { units } = useUnits();
+
+  const [useRegisteredClient, setUseRegisteredClient] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
 
   const activeProducts = useMemo(
     () => products.filter((p) => p.is_active && p.stock_quantity > 0),
@@ -62,6 +76,7 @@ export function ProductSaleModal({ open, onOpenChange }: ProductSaleModalProps) 
       product_id: "",
       barber_id: "",
       quantity: 1,
+      client_id: "",
       client_name: "",
       client_phone: "",
     },
@@ -73,11 +88,48 @@ export function ProductSaleModal({ open, onOpenChange }: ProductSaleModalProps) 
         product_id: "",
         barber_id: "",
         quantity: 1,
+        client_id: "",
         client_name: "",
         client_phone: "",
       });
+      setUseRegisteredClient(false);
+      setSelectedClientId(null);
     }
   }, [open, form]);
+
+  // Auto-fill when selecting a registered client
+  const handleClientSelect = (client: { id: string; name: string; phone: string } | null) => {
+    setSelectedClientId(client?.id || null);
+    if (client) {
+      form.setValue("client_id", client.id);
+      form.setValue("client_name", client.name);
+      form.setValue("client_phone", client.phone);
+    } else {
+      form.setValue("client_id", "");
+      form.setValue("client_name", "");
+      form.setValue("client_phone", "");
+    }
+  };
+
+  const handleCreateNewClient = (searchValue: string) => {
+    setNewClientName(searchValue);
+    setShowClientModal(true);
+  };
+
+  const handleClientCreated = async (data: { name: string; phone: string; birth_date?: string; notes?: string; tags?: string[]; unit_id?: string }) => {
+    try {
+      const newClient = await createClient.mutateAsync(data);
+      if (newClient) {
+        setSelectedClientId(newClient.id);
+        form.setValue("client_id", newClient.id);
+        form.setValue("client_name", newClient.name);
+        form.setValue("client_phone", newClient.phone);
+      }
+      setShowClientModal(false);
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
 
   const selectedProductId = form.watch("product_id");
   const quantity = form.watch("quantity");
@@ -190,34 +242,70 @@ export function ProductSaleModal({ open, onOpenChange }: ProductSaleModalProps) 
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="client_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome do Cliente</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Opcional" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Client Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Cliente</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="use-registered" className="text-xs text-muted-foreground">
+                    Cliente cadastrado
+                  </Label>
+                  <Switch
+                    id="use-registered"
+                    checked={useRegisteredClient}
+                    onCheckedChange={(checked) => {
+                      setUseRegisteredClient(checked);
+                      if (!checked) {
+                        setSelectedClientId(null);
+                        form.setValue("client_id", "");
+                        form.setValue("client_name", "");
+                        form.setValue("client_phone", "");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
 
-              <FormField
-                control={form.control}
-                name="client_phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telefone do Cliente</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Opcional" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {useRegisteredClient ? (
+                <ClientCombobox
+                  clients={clients}
+                  value={selectedClientId}
+                  onChange={handleClientSelect}
+                  onCreateNew={handleCreateNewClient}
+                  placeholder="Buscar cliente por nome ou telefone..."
+                  disabled={isLoadingClients}
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="client_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Opcional" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="client_phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Telefone</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Opcional" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Total */}
@@ -251,6 +339,16 @@ export function ProductSaleModal({ open, onOpenChange }: ProductSaleModalProps) 
           </form>
         </Form>
       </DialogContent>
+      {/* Client Form Modal */}
+      <ClientFormModal
+        open={showClientModal}
+        onOpenChange={setShowClientModal}
+        onCreate={handleClientCreated}
+        isLoading={createClient.isPending}
+        initialName={newClientName}
+        units={units}
+        defaultUnitId={currentUnitId}
+      />
     </Dialog>
   );
 }
