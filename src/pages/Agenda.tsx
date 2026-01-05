@@ -5,6 +5,7 @@ import { CalendarHeader, type CalendarViewType } from "@/components/agenda/Calen
 import { CalendarWeekView } from "@/components/agenda/CalendarWeekView";
 import { CalendarDayView } from "@/components/agenda/CalendarDayView";
 import { CalendarMonthView } from "@/components/agenda/CalendarMonthView";
+import { CancellationHistoryTab } from "@/components/agenda/CancellationHistoryTab";
 import { AppointmentFormModal } from "@/components/agenda/AppointmentFormModal";
 import { AppointmentDetailsModal } from "@/components/agenda/AppointmentDetailsModal";
 import { QuickServiceModal } from "@/components/agenda/QuickServiceModal";
@@ -13,6 +14,8 @@ import { useBarbers } from "@/hooks/useBarbers";
 import { useServices } from "@/hooks/useServices";
 import { useCurrentUnit } from "@/contexts/UnitContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, History } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppointmentStatus = Database["public"]["Enums"]["appointment_status"];
@@ -22,7 +25,7 @@ export default function Agenda() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<CalendarViewType>("week");
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
+  const [activeTab, setActiveTab] = useState<"calendar" | "history">("calendar");
   
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -60,22 +63,13 @@ export default function Agenda() {
     updateAppointment,
     updateStatus,
     deleteAppointment,
-    deleteCancelledAppointments,
     createQuickService,
   } = useAppointments(dateRange.start, dateRange.end, selectedBarberId);
 
-  // Count cancelled appointments
-  const cancelledCount = useMemo(() => {
-    return allAppointments.filter(apt => apt.status === 'cancelled').length;
-  }, [allAppointments]);
-
-  // Filter appointments based on showCancelled toggle
+  // Filter out cancelled appointments from main view
   const appointments = useMemo(() => {
-    if (showCancelled) {
-      return allAppointments;
-    }
     return allAppointments.filter(apt => apt.status !== 'cancelled');
-  }, [allAppointments, showCancelled]);
+  }, [allAppointments]);
 
   const isLoading = barbersLoading || servicesLoading || appointmentsLoading;
 
@@ -120,10 +114,16 @@ export default function Agenda() {
     setIsFormModalOpen(true);
   };
 
-  const handleStatusChange = async (status: AppointmentStatus) => {
+  const handleStatusChange = async (status: AppointmentStatus, isNoShow: boolean = false) => {
     if (selectedAppointment) {
-      await updateStatus.mutateAsync({ id: selectedAppointment.id, status });
+      await updateStatus.mutateAsync({ id: selectedAppointment.id, status, isNoShow });
       setIsDetailsModalOpen(false);
+    }
+  };
+
+  const handleNoShow = async () => {
+    if (selectedAppointment) {
+      await handleStatusChange("cancelled", true);
     }
   };
 
@@ -151,62 +151,78 @@ export default function Agenda() {
   return (
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)]">
-        <CalendarHeader
-          currentDate={currentDate}
-          view={view}
-          barbers={barbers}
-          selectedBarberId={selectedBarberId}
-          showCancelled={showCancelled}
-          cancelledCount={cancelledCount}
-          onDateChange={setCurrentDate}
-          onViewChange={setView}
-          onBarberChange={setSelectedBarberId}
-          onShowCancelledChange={setShowCancelled}
-          onClearCancelled={() => deleteCancelledAppointments.mutate()}
-          isClearingCancelled={deleteCancelledAppointments.isPending}
-          onNewAppointment={handleNewAppointment}
-          onQuickService={() => setIsQuickServiceModalOpen(true)}
-          onRefresh={() => refetchAppointments()}
-          isRefreshing={appointmentsFetching}
-        />
-
-        {isLoading ? (
-          <div className="flex-1 p-4">
-            <div className="space-y-4">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-[500px] w-full" />
-            </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "calendar" | "history")} className="flex flex-col flex-1">
+          <div className="border-b border-border bg-card/50 px-4 pt-2">
+            <TabsList className="grid w-[300px] grid-cols-2">
+              <TabsTrigger value="calendar" className="gap-2">
+                <Calendar className="h-4 w-4" />
+                Calendário
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-2">
+                <History className="h-4 w-4" />
+                Histórico
+              </TabsTrigger>
+            </TabsList>
           </div>
-        ) : (
-          <>
-            {view === "week" && (
-              <CalendarWeekView
-                currentDate={currentDate}
-                appointments={appointments}
-                onAppointmentClick={handleAppointmentClick}
-                onSlotClick={handleSlotClick}
-              />
+          
+          <TabsContent value="calendar" className="flex-1 flex flex-col mt-0">
+            <CalendarHeader
+              currentDate={currentDate}
+              view={view}
+              barbers={barbers}
+              selectedBarberId={selectedBarberId}
+              onDateChange={setCurrentDate}
+              onViewChange={setView}
+              onBarberChange={setSelectedBarberId}
+              onNewAppointment={handleNewAppointment}
+              onQuickService={() => setIsQuickServiceModalOpen(true)}
+              onRefresh={() => refetchAppointments()}
+              isRefreshing={appointmentsFetching}
+            />
+
+            {isLoading ? (
+              <div className="flex-1 p-4">
+                <div className="space-y-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-[500px] w-full" />
+                </div>
+              </div>
+            ) : (
+              <>
+                {view === "week" && (
+                  <CalendarWeekView
+                    currentDate={currentDate}
+                    appointments={appointments}
+                    onAppointmentClick={handleAppointmentClick}
+                    onSlotClick={handleSlotClick}
+                  />
+                )}
+                {view === "day" && (
+                  <CalendarDayView
+                    currentDate={currentDate}
+                    appointments={appointments}
+                    barbers={barbers}
+                    selectedBarberId={selectedBarberId}
+                    onAppointmentClick={handleAppointmentClick}
+                    onSlotClick={handleSlotClick}
+                  />
+                )}
+                {view === "month" && (
+                  <CalendarMonthView
+                    currentDate={currentDate}
+                    appointments={appointments}
+                    onAppointmentClick={handleAppointmentClick}
+                    onDayClick={handleDayClick}
+                  />
+                )}
+              </>
             )}
-            {view === "day" && (
-              <CalendarDayView
-                currentDate={currentDate}
-                appointments={appointments}
-                barbers={barbers}
-                selectedBarberId={selectedBarberId}
-                onAppointmentClick={handleAppointmentClick}
-                onSlotClick={handleSlotClick}
-              />
-            )}
-            {view === "month" && (
-              <CalendarMonthView
-                currentDate={currentDate}
-                appointments={appointments}
-                onAppointmentClick={handleAppointmentClick}
-                onDayClick={handleDayClick}
-              />
-            )}
-          </>
-        )}
+          </TabsContent>
+          
+          <TabsContent value="history" className="flex-1 mt-0 overflow-auto">
+            <CancellationHistoryTab />
+          </TabsContent>
+        </Tabs>
 
         <AppointmentFormModal
           open={isFormModalOpen}
@@ -229,6 +245,7 @@ export default function Agenda() {
           onEdit={handleEditFromDetails}
           onDelete={handleDelete}
           onStatusChange={handleStatusChange}
+          onNoShow={handleNoShow}
           isLoading={updateStatus.isPending || deleteAppointment.isPending}
         />
 

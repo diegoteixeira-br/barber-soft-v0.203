@@ -1,8 +1,6 @@
-import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw, Eye, EyeOff, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Toggle } from "@/components/ui/toggle";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, addDays, addWeeks, addMonths, subDays, subWeeks, subMonths, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Barber } from "@/hooks/useBarbers";
@@ -14,14 +12,9 @@ interface CalendarHeaderProps {
   view: CalendarViewType;
   barbers: Barber[];
   selectedBarberId: string | null;
-  showCancelled?: boolean;
-  cancelledCount?: number;
   onDateChange: (date: Date) => void;
   onViewChange: (view: CalendarViewType) => void;
   onBarberChange: (barberId: string | null) => void;
-  onShowCancelledChange?: (show: boolean) => void;
-  onClearCancelled?: () => void;
-  isClearingCancelled?: boolean;
   onNewAppointment: () => void;
   onQuickService: () => void;
   onRefresh?: () => void;
@@ -33,14 +26,9 @@ export function CalendarHeader({
   view,
   barbers,
   selectedBarberId,
-  showCancelled = false,
-  cancelledCount = 0,
   onDateChange,
   onViewChange,
   onBarberChange,
-  onShowCancelledChange,
-  onClearCancelled,
-  isClearingCancelled,
   onNewAppointment,
   onQuickService,
   onRefresh,
@@ -107,60 +95,6 @@ export function CalendarHeader({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {onShowCancelledChange && (
-          <div className="flex items-center gap-1">
-            <Toggle
-              pressed={showCancelled}
-              onPressedChange={onShowCancelledChange}
-              aria-label="Mostrar cancelados"
-              title={showCancelled ? "Ocultar cancelados" : "Mostrar cancelados"}
-              className="gap-1.5"
-            >
-              {showCancelled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              <span className="hidden sm:inline text-xs">Cancelados</span>
-              {cancelledCount > 0 && (
-                <span className="ml-1 text-xs bg-muted-foreground/20 px-1.5 py-0.5 rounded-full">
-                  {cancelledCount}
-                </span>
-              )}
-            </Toggle>
-            
-            {showCancelled && cancelledCount > 0 && onClearCancelled && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    disabled={isClearingCancelled}
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    <span className="hidden sm:inline">Limpar</span>
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Excluir todos os cancelados?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Esta ação irá excluir permanentemente {cancelledCount} agendamento(s) cancelado(s) desta unidade.
-                      Isso não pode ser desfeito.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={onClearCancelled} 
-                      className="bg-destructive hover:bg-destructive/90"
-                    >
-                      {isClearingCancelled ? "Excluindo..." : "Excluir Todos"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-        )}
-
         <Select value={view} onValueChange={(v) => onViewChange(v as CalendarViewType)}>
           <SelectTrigger className="w-[120px]">
             <Calendar className="h-4 w-4 mr-2" />

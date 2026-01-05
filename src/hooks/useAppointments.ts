@@ -267,8 +267,60 @@ export function useAppointments(startDate?: Date, endDate?: Date, barberId?: str
     },
   });
 
+  // Helper to record cancellation in history
+  const recordCancellationHistory = async (
+    appointment: Appointment,
+    isNoShow: boolean = false,
+    source: string = "manual"
+  ) => {
+    const now = new Date();
+    const scheduledTime = new Date(appointment.start_time);
+    const minutesBefore = Math.round((scheduledTime.getTime() - now.getTime()) / 60000);
+    const isLateCancellation = minutesBefore < 10;
+
+    const { error } = await supabase
+      .from("cancellation_history")
+      .insert({
+        unit_id: appointment.unit_id,
+        company_id: appointment.company_id,
+        appointment_id: appointment.id,
+        client_name: appointment.client_name,
+        client_phone: appointment.client_phone,
+        barber_name: appointment.barber?.name || "Desconhecido",
+        service_name: appointment.service?.name || "Serviço",
+        scheduled_time: appointment.start_time,
+        cancelled_at: now.toISOString(),
+        minutes_before: minutesBefore,
+        is_late_cancellation: isLateCancellation,
+        is_no_show: isNoShow,
+        total_price: appointment.total_price,
+        cancellation_source: isNoShow ? "no_show" : source,
+      });
+
+    if (error) {
+      console.error("Error recording cancellation history:", error);
+    }
+  };
+
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: AppointmentStatus }) => {
+    mutationFn: async ({ id, status, isNoShow = false }: { id: string; status: AppointmentStatus; isNoShow?: boolean }) => {
+      // Fetch full appointment data first for cancellation history
+      if (status === "cancelled") {
+        const { data: fullAppointment } = await supabase
+          .from("appointments")
+          .select(`
+            *,
+            barber:barbers(id, name, calendar_color),
+            service:services(id, name, duration_minutes, price)
+          `)
+          .eq("id", id)
+          .single();
+
+        if (fullAppointment) {
+          await recordCancellationHistory(fullAppointment as Appointment, isNoShow, "manual");
+        }
+      }
+
       const { data, error } = await supabase
         .from("appointments")
         .update({ status })
@@ -281,6 +333,7 @@ export function useAppointments(startDate?: Date, endDate?: Date, barberId?: str
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["cancellation-history"] });
       toast({ title: "Status atualizado!" });
     },
     onError: (error) => {
@@ -302,27 +355,6 @@ export function useAppointments(startDate?: Date, endDate?: Date, barberId?: str
     },
   });
 
-  // Delete all cancelled appointments (cleanup)
-  const deleteCancelledAppointments = useMutation({
-    mutationFn: async () => {
-      if (!currentUnitId) throw new Error("Nenhuma unidade selecionada");
-      
-      const { error } = await supabase
-        .from("appointments")
-        .delete()
-        .eq("unit_id", currentUnitId)
-        .eq("status", "cancelled");
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      toast({ title: "Agendamentos cancelados excluídos!" });
-    },
-    onError: (error) => {
-      toast({ title: "Erro ao limpar cancelados", description: error.message, variant: "destructive" });
-    },
-  });
 
   // Create quick service (already completed)
   const createQuickService = useMutation({
@@ -382,7 +414,6 @@ export function useAppointments(startDate?: Date, endDate?: Date, barberId?: str
     updateAppointment,
     updateStatus,
     deleteAppointment,
-    deleteCancelledAppointments,
     createQuickService,
   };
 }

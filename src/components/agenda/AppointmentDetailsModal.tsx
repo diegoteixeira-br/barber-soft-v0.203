@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Phone, User, Scissors, Clock, DollarSign, Calendar, Edit, Trash2, CheckCircle, XCircle, Cake } from "lucide-react";
+import { Phone, User, Scissors, Clock, DollarSign, Calendar, Edit, Trash2, CheckCircle, XCircle, Cake, UserX } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +18,7 @@ interface AppointmentDetailsModalProps {
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: (status: AppointmentStatus) => void;
+  onNoShow?: () => void;
   isLoading?: boolean;
 }
 
@@ -28,6 +29,7 @@ export function AppointmentDetailsModal({
   onEdit,
   onDelete,
   onStatusChange,
+  onNoShow,
   isLoading,
 }: AppointmentDetailsModalProps) {
   if (!appointment) return null;
@@ -140,6 +142,17 @@ export function AppointmentDetailsModal({
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   {getNextStatusLabel(nextStatus)}
+                </Button>
+              )}
+              {onNoShow && (
+                <Button
+                  variant="outline"
+                  onClick={onNoShow}
+                  disabled={isLoading}
+                  className="text-destructive border-destructive hover:bg-destructive/10"
+                >
+                  <UserX className="h-4 w-4 mr-2" />
+                  Faltou
                 </Button>
               )}
               <Button

@@ -199,6 +199,66 @@ export type Database = {
         }
         Relationships: []
       }
+      cancellation_history: {
+        Row: {
+          appointment_id: string | null
+          barber_name: string
+          cancellation_source: string
+          cancelled_at: string
+          client_name: string
+          client_phone: string | null
+          company_id: string | null
+          created_at: string
+          id: string
+          is_late_cancellation: boolean
+          is_no_show: boolean
+          minutes_before: number
+          notes: string | null
+          scheduled_time: string
+          service_name: string
+          total_price: number
+          unit_id: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          barber_name: string
+          cancellation_source?: string
+          cancelled_at?: string
+          client_name: string
+          client_phone?: string | null
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          is_late_cancellation?: boolean
+          is_no_show?: boolean
+          minutes_before?: number
+          notes?: string | null
+          scheduled_time: string
+          service_name: string
+          total_price?: number
+          unit_id: string
+        }
+        Update: {
+          appointment_id?: string | null
+          barber_name?: string
+          cancellation_source?: string
+          cancelled_at?: string
+          client_name?: string
+          client_phone?: string | null
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          is_late_cancellation?: boolean
+          is_no_show?: boolean
+          minutes_before?: number
+          notes?: string | null
+          scheduled_time?: string
+          service_name?: string
+          total_price?: number
+          unit_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           birth_date: string | null

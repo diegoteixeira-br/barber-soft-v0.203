@@ -633,6 +633,45 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
   );
 }
 
+// Helper to record cancellation in history
+async function recordCancellationHistory(
+  supabase: any,
+  appointment: any,
+  barberName: string,
+  serviceName: string,
+  source: string = "whatsapp"
+) {
+  const now = new Date();
+  const scheduledTime = new Date(appointment.start_time);
+  const minutesBefore = Math.round((scheduledTime.getTime() - now.getTime()) / 60000);
+  const isLateCancellation = minutesBefore < 10;
+
+  const { error } = await supabase
+    .from("cancellation_history")
+    .insert({
+      unit_id: appointment.unit_id,
+      company_id: appointment.company_id || null,
+      appointment_id: appointment.id,
+      client_name: appointment.client_name,
+      client_phone: appointment.client_phone,
+      barber_name: barberName,
+      service_name: serviceName,
+      scheduled_time: appointment.start_time,
+      cancelled_at: now.toISOString(),
+      minutes_before: minutesBefore,
+      is_late_cancellation: isLateCancellation,
+      is_no_show: false,
+      total_price: appointment.total_price || 0,
+      cancellation_source: source,
+    });
+
+  if (error) {
+    console.error("Error recording cancellation history:", error);
+  } else {
+    console.log(`Cancellation recorded in history: ${appointment.client_name}, ${minutesBefore} min before, late: ${isLateCancellation}`);
+  }
+}
+
 // Handler para cancelar agendamento
 async function handleCancel(supabase: any, body: any, corsHeaders: any) {
   // Normalizar campos
@@ -641,7 +680,7 @@ async function handleCancel(supabase: any, body: any, corsHeaders: any) {
   // Normalizar telefone - remover caracteres especiais para consistência
   const clientPhone = rawPhone?.replace(/\D/g, '') || null;
   const targetDate = body.data || body.datetime;
-  const { unit_id, unit_timezone } = body;
+  const { unit_id, company_id, unit_timezone } = body;
   const timezone = unit_timezone || 'America/Sao_Paulo';
 
   if (!unit_id) {
@@ -662,12 +701,31 @@ async function handleCancel(supabase: any, body: any, corsHeaders: any) {
 
   // Se temos appointment_id, cancelar diretamente
   if (appointmentId) {
+    // First fetch full appointment data for history
+    const { data: fullAppointment, error: fetchError } = await supabase
+      .from('appointments')
+      .select(`
+        *,
+        barber:barbers(name),
+        service:services(name)
+      `)
+      .eq('id', appointmentId)
+      .eq('unit_id', unit_id)
+      .in('status', ['pending', 'confirmed'])
+      .single();
+
+    if (fetchError || !fullAppointment) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Agendamento não encontrado ou já cancelado' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Cancel the appointment
     const { data: cancelled, error: cancelError } = await supabase
       .from('appointments')
       .update({ status: 'cancelled' })
       .eq('id', appointmentId)
-      .eq('unit_id', unit_id)
-      .in('status', ['pending', 'confirmed'])
       .select();
 
     if (cancelError) {
@@ -678,12 +736,14 @@ async function handleCancel(supabase: any, body: any, corsHeaders: any) {
       );
     }
 
-    if (!cancelled || cancelled.length === 0) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Agendamento não encontrado ou já cancelado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Record in cancellation history
+    await recordCancellationHistory(
+      supabase,
+      { ...fullAppointment, company_id: company_id || fullAppointment.company_id },
+      fullAppointment.barber?.name || 'Desconhecido',
+      fullAppointment.service?.name || 'Serviço',
+      'whatsapp'
+    );
 
     console.log('Appointment cancelled by ID:', cancelled[0]);
 
@@ -697,10 +757,14 @@ async function handleCancel(supabase: any, body: any, corsHeaders: any) {
     );
   }
 
-  // Se temos telefone, buscar agendamento
+  // Se temos telefone, buscar agendamento com dados completos
   let query = supabase
     .from('appointments')
-    .select('id, client_name, start_time, status, created_at')
+    .select(`
+      id, client_name, client_phone, start_time, end_time, status, created_at, total_price, unit_id, company_id,
+      barber:barbers(name),
+      service:services(name)
+    `)
     .eq('unit_id', unit_id)
     .eq('client_phone', clientPhone)
     .in('status', ['pending', 'confirmed']);
@@ -765,6 +829,15 @@ async function handleCancel(supabase: any, body: any, corsHeaders: any) {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+
+  // Record in cancellation history
+  await recordCancellationHistory(
+    supabase,
+    { ...appointmentToCancel, company_id: company_id || appointmentToCancel.company_id },
+    appointmentToCancel.barber?.name || 'Desconhecido',
+    appointmentToCancel.service?.name || 'Serviço',
+    'whatsapp'
+  );
 
   console.log('Appointment cancelled:', cancelled[0]);
 
