@@ -410,8 +410,10 @@ export type Database = {
           created_at: string | null
           id: string
           last_visit_at: string | null
+          marketing_opt_out: boolean | null
           name: string
           notes: string | null
+          opted_out_at: string | null
           phone: string
           tags: string[] | null
           total_visits: number | null
@@ -424,8 +426,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           last_visit_at?: string | null
+          marketing_opt_out?: boolean | null
           name: string
           notes?: string | null
+          opted_out_at?: string | null
           phone: string
           tags?: string[] | null
           total_visits?: number | null
@@ -438,8 +442,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           last_visit_at?: string | null
+          marketing_opt_out?: boolean | null
           name?: string
           notes?: string | null
+          opted_out_at?: string | null
           phone?: string
           tags?: string[] | null
           total_visits?: number | null

@@ -113,7 +113,45 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Creating campaign for unit ${unit.name} with ${targets.length} targets`);
+    // Fetch opted-out clients to filter them
+    const { data: optedOutClients } = await supabase
+      .from("clients")
+      .select("phone")
+      .eq("company_id", unit.company_id)
+      .eq("marketing_opt_out", true);
+
+    const optedOutPhones = new Set(
+      (optedOutClients || []).map((c: { phone: string }) => 
+        c.phone.replace(/\D/g, "").replace(/^55/, "")
+      )
+    );
+
+    // Filter targets, removing opted-out clients
+    const filteredTargets = targets.filter((t) => {
+      const normalizedPhone = t.phone.replace(/\D/g, "").replace(/^55/, "");
+      const isOptedOut = optedOutPhones.has(normalizedPhone);
+      if (isOptedOut) {
+        console.log(`Skipping opted-out client: ${t.name} (${t.phone})`);
+      }
+      return !isOptedOut;
+    });
+
+    if (filteredTargets.length === 0) {
+      console.log("All targets have opted out");
+      return new Response(
+        JSON.stringify({ 
+          error: "Todos os destinatários selecionados fizeram opt-out e não receberão mensagens de marketing" 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const skippedCount = targets.length - filteredTargets.length;
+    if (skippedCount > 0) {
+      console.log(`Filtered out ${skippedCount} opted-out clients`);
+    }
+
+    console.log(`Creating campaign for unit ${unit.name} with ${filteredTargets.length} targets (${skippedCount} skipped due to opt-out)`);
 
     // Create campaign record
     const { data: campaign, error: campaignError } = await supabase
@@ -124,7 +162,7 @@ serve(async (req) => {
         message_template,
         media_url: media_url || null,
         media_type: media_type || null,
-        total_recipients: targets.length,
+        total_recipients: filteredTargets.length,
         status: "processing",
         created_by: user.id,
       })
@@ -142,7 +180,7 @@ serve(async (req) => {
     console.log(`Campaign ${campaign.id} created`);
 
     // Create message logs for each target
-    const logs = targets.map((t) => ({
+    const logs = filteredTargets.map((t) => ({
       campaign_id: campaign.id,
       recipient_phone: t.phone,
       recipient_name: t.name,
@@ -171,7 +209,7 @@ serve(async (req) => {
     console.log(`Created ${insertedLogs?.length} message logs`);
 
     // Build contacts array with log IDs for callback
-    const contacts = targets.map((t) => {
+    const contacts = filteredTargets.map((t) => {
       const log = insertedLogs?.find((l) => l.recipient_phone === t.phone);
       // Remove non-digits, remove leading 55 if present, then add 55 prefix
       const cleanNumber = t.phone.replace(/\D/g, "").replace(/^55/, "");
@@ -232,7 +270,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         campaign_id: campaign.id,
-        message: `Campanha iniciada para ${targets.length} contato(s). Processando em segundo plano...` 
+        message: `Campanha iniciada para ${filteredTargets.length} contato(s)${skippedCount > 0 ? ` (${skippedCount} ignorados por opt-out)` : ''}. Processando em segundo plano...` 
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

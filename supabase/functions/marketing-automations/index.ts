@@ -154,11 +154,12 @@ Deno.serve(async (req) => {
 
       console.log(`Empresa: ${company.name} (${company.id})`);
 
-      // Buscar clientes da empresa
+      // Buscar clientes da empresa (excluindo os que fizeram opt-out)
       const { data: clients, error: clientsError } = await supabase
         .from("clients")
         .select("*")
-        .eq("company_id", company.id);
+        .eq("company_id", company.id)
+        .or("marketing_opt_out.is.null,marketing_opt_out.eq.false");
 
       if (clientsError) {
         console.error("Erro ao buscar clientes:", clientsError);

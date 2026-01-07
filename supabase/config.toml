@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.appointment-reminders]
 verify_jwt = false
+
+[functions.process-opt-out]
+verify_jwt = false
+
+[functions.get-remaining-spots]
+verify_jwt = false
