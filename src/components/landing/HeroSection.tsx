@@ -5,27 +5,14 @@ import { ChatSimulation } from "./ChatSimulation";
 import { DashboardPreview } from "./DashboardPreview";
 import { DemoTourModal } from "./DemoTourModal";
 import { useNavigate } from "react-router-dom";
-import heroVideo from "@/assets/hero-barbershop-video.mp4";
-
 export function HeroSection() {
   const navigate = useNavigate();
   const [demoOpen, setDemoOpen] = useState(false);
-
-  return (
-    <section className="min-h-screen pt-24 pb-16 flex items-center relative overflow-hidden">
+  return <section className="min-h-screen pt-24 pb-16 flex items-center relative overflow-hidden">
       {/* Background Video */}
       <div className="absolute inset-0 z-0">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-        >
-          <source 
-            src={heroVideo} 
-            type="video/mp4" 
-          />
+        <video autoPlay loop muted playsInline className="w-full h-full object-cover" poster="https://images.pexels.com/videos/7697186/pexels-photo-7697186.jpeg?auto=compress&cs=tinysrgb&w=1920">
+          <source src="https://videos.pexels.com/video-files/7697186/7697186-uhd_2560_1440_30fps.mp4" type="video/mp4" />
         </video>
         {/* Dark overlay for text readability */}
         <div className="absolute inset-0 bg-black/70" />
@@ -55,20 +42,11 @@ export function HeroSection() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start animate-fade-in">
-              <Button
-                size="lg"
-                className="bg-gold hover:bg-gold/90 text-black font-bold text-lg px-8 py-6 glow-gold animate-pulse-subtle group"
-                onClick={() => navigate("/auth?tab=signup")}
-              >
+              <Button size="lg" className="bg-gold hover:bg-gold/90 text-black font-bold text-lg px-8 py-6 glow-gold animate-pulse-subtle group" onClick={() => navigate("/auth?tab=signup")}>
                 Testar Grátis Agora
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-border/50 hover:bg-muted/50 text-lg px-8 py-6"
-                onClick={() => setDemoOpen(true)}
-              >
+              <Button size="lg" variant="outline" className="border-border/50 hover:bg-muted/50 text-lg px-8 py-6" onClick={() => setDemoOpen(true)}>
                 <Play className="mr-2 h-5 w-5" />
                 Ver Demo
               </Button>
@@ -98,32 +76,10 @@ export function HeroSection() {
           </div>
 
           {/* Mockups */}
-          <div className="relative animate-fade-in">
-            {/* Notebook Mockup */}
-            <div className="relative z-10 bg-charcoal rounded-lg p-2 shadow-2xl border border-border/30 transform hover:scale-[1.02] transition-transform duration-300">
-              <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/30">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-              </div>
-              <div className="aspect-video bg-background rounded overflow-hidden">
-                <DashboardPreview />
-              </div>
-            </div>
-
-            {/* Phone Mockup with Chat */}
-            <div className="absolute -right-4 -bottom-8 w-64 z-20 transform hover:scale-105 transition-transform duration-300">
-              <ChatSimulation />
-            </div>
-
-            {/* Decorative Elements */}
-            <div className="absolute -top-4 -left-4 w-24 h-24 bg-gold/20 rounded-full blur-xl" />
-            <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-orange-neon/20 rounded-full blur-xl" />
-          </div>
+          
         </div>
       </div>
 
       <DemoTourModal open={demoOpen} onOpenChange={setDemoOpen} />
-    </section>
-  );
+    </section>;
 }
