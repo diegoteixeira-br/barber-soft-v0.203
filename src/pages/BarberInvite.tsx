@@ -40,47 +40,34 @@ export default function BarberInvite() {
       }
 
       try {
-        // Query barber by invite token
-        const { data, error: queryError } = await supabase
-          .from("barbers")
-          .select(`
-            id,
-            name,
-            email,
-            user_id,
-            units!inner(name, company_id),
-            companies:units!inner(company_id(name))
-          `)
-          .eq("invite_token", token)
-          .maybeSingle();
+        // Validate token via secure edge function (no public table access)
+        const { data: response, error: invokeError } = await supabase.functions.invoke(
+          "validate-barber-invite",
+          {
+            body: { token },
+          }
+        );
 
-        if (queryError) throw queryError;
+        if (invokeError) throw invokeError;
 
-        if (!data) {
-          setError("Convite não encontrado ou expirado");
+        if (!response?.valid) {
+          setError(response?.error || "Convite não encontrado ou expirado");
           setIsValidating(false);
           return;
         }
 
-        if (data.user_id) {
-          setError("Este convite já foi utilizado. Faça login na sua conta.");
-          setIsValidating(false);
-          return;
-        }
-
-        const unitData = data.units as any;
-        const companyData = (data.companies as any)?.company_id as any;
+        const barber = response.barber;
 
         setBarberInfo({
-          id: data.id,
-          name: data.name,
-          email: data.email,
-          unit_name: unitData?.name || "Unidade",
-          company_name: companyData?.name || "Empresa",
+          id: barber.id,
+          name: barber.name,
+          email: barber.email,
+          unit_name: barber.unit_name,
+          company_name: barber.company_name,
         });
 
-        if (data.email) {
-          setEmail(data.email);
+        if (barber.email) {
+          setEmail(barber.email);
         }
       } catch (err) {
         console.error("Error validating token:", err);
