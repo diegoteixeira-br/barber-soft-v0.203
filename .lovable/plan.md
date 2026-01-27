@@ -1,197 +1,304 @@
 
+# Plano: Sistema de Controle de Parceiros
 
-# Plano: Configuração Completa de Planos, Stripe e Pixels de Rastreamento
+## Visao Geral
+Implementar um sistema completo de gestao de parceiros para barbearias que recebem acesso gratuito por um periodo especifico, com possibilidade de renovacao ou migracao para um plano pago quando o periodo expirar.
 
-## Resumo
+## Alteracoes no Banco de Dados
 
-Este plano implementa uma configuração completa no painel de administração para:
-1. **Gerenciamento de Planos** com features configuráveis e desconto anual
-2. **Integração com Stripe** para cobranças automáticas
-3. **Configuração de Pixels** (Meta, Google, TikTok) para rastreamento de campanhas
-
----
-
-## Parte 1: Reestruturação dos Planos
-
-### O que será feito
-- Renomear os planos de "Profissional/Elite/Empire" para "Inicial/Profissional/Franquias" 
-- Adicionar configuração de preço anual (com desconto de 20%)
-- Criar sistema de features configuráveis por plano
-
-### Interface no Admin
-Será criada uma nova seção "Configuração de Planos" com:
-- Cards para cada plano (Inicial, Profissional, Franquias)
-- Preço mensal e anual editáveis
-- Percentual de desconto anual configurável
-- Lista de features com toggle para cada plano
-
----
-
-## Parte 2: Configuração de Features por Plano
-
-### Features disponíveis
-| Feature | Inicial | Profissional | Franquias |
-|---------|---------|--------------|-----------|
-| Unidades | 1 | 1 | Ilimitado |
-| Profissionais | Até 5 | Até 10 | Ilimitado |
-| Agenda completa | Sim | Sim | Sim |
-| Dashboard financeiro | Sim | Sim | Sim |
-| Gestão de clientes | Sim | Sim | Sim |
-| Controle de serviços | Sim | Sim | Sim |
-| Integração WhatsApp | Nao | Sim | Sim |
-| Jackson IA | Nao | Sim | Sim |
-| Marketing e automacoes | Nao | Sim | Sim |
-| Comissões automáticas | Nao | Sim | Sim |
-| Controle de estoque | Nao | Sim | Sim |
-| Relatórios avançados | Nao | Sim | Sim |
-| Dashboard consolidado | Nao | Nao | Sim |
-
----
-
-## Parte 3: Configuração de Pixels de Rastreamento
-
-### Nova aba/card no Admin Settings
-Será adicionado um novo componente "TrackingPixelsCard" com campos para:
-
-**Meta Pixel (Facebook/Instagram)**
-- Pixel ID
-- Access Token (opcional, para API de conversões)
-
-**Google Ads / Analytics**
-- Google Tag ID (GT-XXXXX ou AW-XXXXX)
-- Conversion ID (opcional)
-
-**TikTok Pixel**
-- Pixel ID
-
-### Onde os pixels serão injetados
-Os scripts serão inseridos no `index.html` ou via componente React que injeta no `<head>`, permitindo:
-- Rastreamento de PageView em todas as páginas
-- Evento de "Lead" no cadastro
-- Evento de "Purchase" na assinatura confirmada
-
----
-
-## Parte 4: Alterações no Banco de Dados
-
-### Nova estrutura da tabela `saas_settings`
-Serão adicionadas as seguintes colunas:
+### Novos Campos na Tabela `companies`
+Adicionar campos especificos para controle de parcerias:
 
 ```sql
--- Preços dos planos renomeados
-inicial_plan_price DECIMAL(10,2) DEFAULT 99.00,
-inicial_plan_annual_price DECIMAL(10,2) DEFAULT 79.00,
-profissional_plan_price DECIMAL(10,2) DEFAULT 199.00,
-profissional_plan_annual_price DECIMAL(10,2) DEFAULT 159.00,
-franquias_plan_price DECIMAL(10,2) DEFAULT 499.00,
-franquias_plan_annual_price DECIMAL(10,2) DEFAULT 399.00,
-annual_discount_percent INTEGER DEFAULT 20,
-
--- Pixels de rastreamento
-meta_pixel_id TEXT,
-meta_access_token TEXT,
-google_tag_id TEXT,
-google_conversion_id TEXT,
-tiktok_pixel_id TEXT
+ALTER TABLE public.companies
+  ADD COLUMN IF NOT EXISTS is_partner BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS partner_started_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS partner_ends_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS partner_notes TEXT,
+  ADD COLUMN IF NOT EXISTS partner_renewed_count INTEGER DEFAULT 0;
 ```
 
-### Nova tabela `plan_features`
-Para armazenar features configuráveis por plano:
+- **is_partner**: Indica se a barbearia e um parceiro
+- **partner_started_at**: Data de inicio da parceria
+- **partner_ends_at**: Data de termino da parceria
+- **partner_notes**: Notas/observacoes sobre a parceria
+- **partner_renewed_count**: Quantas vezes a parceria foi renovada
+
+### Novo Valor de plan_status
+Adicionar `partner` como um status valido para distinguir parceiros de trials e assinaturas pagas.
+
+## Alteracoes no Frontend
+
+### 1. Atualizar Interface da Tabela de Barbearias
+
+**Arquivo**: `src/components/admin/CompaniesTable.tsx`
+
+Alteracoes:
+- Adicionar badge visual "Parceiro" em roxo/verde para identificar parceiros
+- Mostrar data de termino da parceria quando aplicavel
+- Novas opcoes no menu dropdown:
+  - "Ativar Parceria" - abre modal para configurar
+  - "Renovar Parceria" - para parceiros existentes
+  - "Encerrar Parceria" - converte para status trial ou cancellled
+
+### 2. Criar Modal de Gestao de Parceria
+
+**Novo Arquivo**: `src/components/admin/PartnershipModal.tsx`
+
+Funcionalidades:
+- Campo para selecionar duracao da parceria (ex: 1 mes, 3 meses, 6 meses, 1 ano, personalizado)
+- Seletor de data de inicio e fim
+- Campo de notas/observacoes
+- Seletor de plano que o parceiro tera acesso (Inicial, Profissional, Franquias)
+- Historico de renovacoes anteriores
+- Botao de confirmar ativacao/renovacao
+
+### 3. Atualizar Modal de Detalhes da Empresa
+
+**Arquivo**: `src/components/admin/CompanyDetailsModal.tsx`
+
+Adicionar secao de parceria mostrando:
+- Status de parceiro (Sim/Nao)
+- Data de inicio da parceria
+- Data de termino da parceria
+- Dias restantes
+- Numero de renovacoes
+- Notas da parceria
+
+### 4. Atualizar Hook de Admin Companies
+
+**Arquivo**: `src/hooks/useAdminCompanies.ts`
+
+Novas funcoes:
+- `activatePartnership({ companyId, planType, startsAt, endsAt, notes })` - Ativa parceria
+- `renewPartnership({ companyId, additionalDays, notes })` - Renova parceria existente
+- `endPartnership({ companyId, convertToTrial })` - Encerra parceria
+
+Atualizar interface `AdminCompany` com novos campos:
+- is_partner
+- partner_started_at
+- partner_ends_at
+- partner_notes
+- partner_renewed_count
+
+### 5. Atualizar Cores/Badges de Status
+
+**Arquivo**: `src/components/admin/CompaniesTable.tsx`
+
+```typescript
+const statusColors = {
+  trial: "bg-yellow-500/20 text-yellow-400",
+  active: "bg-green-500/20 text-green-400",
+  partner: "bg-purple-500/20 text-purple-400",  // NOVO
+  cancelled: "bg-slate-500/20 text-slate-400",
+  overdue: "bg-red-500/20 text-red-400",
+};
+```
+
+## Logica de Expiracao de Parceria
+
+### Verificacao no Edge Function `check-subscription`
+
+**Arquivo**: `supabase/functions/check-subscription/index.ts`
+
+Adicionar logica para verificar se a parceria expirou:
+
+```typescript
+// Se e parceiro, verificar se ainda esta valido
+if (company.is_partner && company.partner_ends_at) {
+  const partnerEndsAt = new Date(company.partner_ends_at);
+  if (partnerEndsAt > new Date()) {
+    // Parceria ainda valida
+    return { subscribed: true, plan_status: 'partner', ... };
+  } else {
+    // Parceria expirou - atualizar status no banco
+    await updateCompanyStatus(company.id, 'expired_partner');
+  }
+}
+```
+
+### Fluxo Quando Parceria Expira
+
+1. O parceiro continua com acesso aos dados (clientes, agendamentos, etc.)
+2. O sistema mostra banner informando que a parceria expirou
+3. O parceiro pode:
+   - Aguardar renovacao pelo super admin
+   - Contratar um plano pago normalmente
+
+## Componentes a Serem Criados/Modificados
+
+| Componente | Acao | Descricao |
+|------------|------|-----------|
+| `PartnershipModal.tsx` | Criar | Modal para ativar/renovar parceria |
+| `CompaniesTable.tsx` | Modificar | Adicionar badge e acoes de parceiro |
+| `CompanyDetailsModal.tsx` | Modificar | Mostrar info de parceria |
+| `useAdminCompanies.ts` | Modificar | Adicionar funcoes de parceria |
+| `check-subscription/index.ts` | Modificar | Verificar status de parceiro |
+
+## Interface do Modal de Parceria
+
+```text
++--------------------------------------------------+
+|         Gerenciar Parceria                       |
++--------------------------------------------------+
+|                                                  |
+|  Barbearia: [Nome da Barbearia]                  |
+|                                                  |
+|  Plano com Acesso:                               |
+|  [ ] Inicial  [x] Profissional  [ ] Franquias    |
+|                                                  |
+|  Periodo da Parceria:                            |
+|  [Selecione] v   ou   Personalizado              |
+|  - 1 mes                                         |
+|  - 3 meses                                       |
+|  - 6 meses                                       |
+|  - 1 ano                                         |
+|                                                  |
+|  Data Inicio: [27/01/2026]                       |
+|  Data Termino: [27/01/2027]                      |
+|                                                  |
+|  Notas/Observacoes:                              |
+|  +----------------------------------------------+|
+|  | Parceria fechada na feira de negocios...     ||
+|  +----------------------------------------------+|
+|                                                  |
+|  Historico: 0 renovacoes anteriores              |
+|                                                  |
+|       [Cancelar]    [Ativar Parceria]            |
++--------------------------------------------------+
+```
+
+## Secao Tecnica
+
+### Migracao SQL Completa
 
 ```sql
-CREATE TABLE plan_features (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  feature_key TEXT NOT NULL,  -- ex: 'max_units', 'whatsapp_integration'
-  feature_name TEXT NOT NULL, -- ex: 'Unidades', 'Integração WhatsApp'
-  feature_type TEXT NOT NULL, -- 'limit' ou 'boolean'
-  inicial_value TEXT,         -- '1' ou 'true'/'false'
-  profissional_value TEXT,    -- '1' ou 'true'
-  franquias_value TEXT,       -- 'unlimited' ou 'true'
-  display_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Campos para controle de parcerias
+ALTER TABLE public.companies
+  ADD COLUMN IF NOT EXISTS is_partner BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS partner_started_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS partner_ends_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS partner_notes TEXT,
+  ADD COLUMN IF NOT EXISTS partner_renewed_count INTEGER DEFAULT 0;
+
+-- Indice para consultas de parceiros
+CREATE INDEX IF NOT EXISTS idx_companies_partner 
+  ON public.companies (is_partner, partner_ends_at);
 ```
 
----
+### Atualizacao do Hook useAdminCompanies
 
-## Parte 5: Novos Componentes
+```typescript
+// Nova interface
+export interface AdminCompany {
+  // ... campos existentes ...
+  is_partner: boolean | null;
+  partner_started_at: string | null;
+  partner_ends_at: string | null;
+  partner_notes: string | null;
+  partner_renewed_count: number | null;
+}
 
-### 1. `PlanFeaturesCard.tsx`
-- Gerenciar features de cada plano
-- Interface em tabela com toggles/inputs para cada valor
-- Botão para adicionar novas features
+// Nova mutation para ativar parceria
+const activatePartnershipMutation = useMutation({
+  mutationFn: async ({ 
+    companyId, 
+    planType, 
+    startsAt, 
+    endsAt, 
+    notes 
+  }: ActivatePartnershipParams) => {
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        is_partner: true,
+        plan_status: 'partner',
+        plan_type: planType,
+        partner_started_at: startsAt,
+        partner_ends_at: endsAt,
+        partner_notes: notes,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", companyId);
+    
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    toast.success("Parceria ativada com sucesso");
+    queryClient.invalidateQueries({ queryKey: ["admin-companies"] });
+  }
+});
 
-### 2. `TrackingPixelsCard.tsx`
-- Campos para configurar pixels de cada plataforma
-- Botão "Testar Pixel" para verificar se está funcionando
-- Indicador de status (configurado/não configurado)
+// Nova mutation para renovar parceria
+const renewPartnershipMutation = useMutation({
+  mutationFn: async ({ companyId, newEndDate, notes }) => {
+    const company = companies.find(c => c.id === companyId);
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        partner_ends_at: newEndDate,
+        partner_notes: notes,
+        partner_renewed_count: (company?.partner_renewed_count || 0) + 1,
+        plan_status: 'partner',
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", companyId);
+    
+    if (error) throw error;
+  }
+});
+```
 
-### 3. `TrackingScripts.tsx`
-- Componente que lê as configurações de pixels
-- Injeta scripts no head da página
-- Dispara eventos de conversão
+### Logica de Verificacao no check-subscription
 
----
+```typescript
+// Verificar se e parceiro ativo
+if (company.is_partner && company.partner_ends_at) {
+  const partnerEnds = new Date(company.partner_ends_at);
+  const now = new Date();
+  
+  if (partnerEnds > now) {
+    // Parceria valida
+    return new Response(JSON.stringify({
+      subscribed: true,
+      plan_status: 'partner',
+      plan_type: company.plan_type,
+      partner_ends_at: company.partner_ends_at,
+      days_remaining: Math.ceil((partnerEnds - now) / (1000 * 60 * 60 * 24))
+    }), { headers: corsHeaders, status: 200 });
+  } else {
+    // Parceria expirou - manter dados, atualizar status
+    await supabaseClient
+      .from("companies")
+      .update({ plan_status: 'expired_partner' })
+      .eq("id", company.id);
+    
+    return new Response(JSON.stringify({
+      subscribed: false,
+      plan_status: 'expired_partner',
+      partner_expired: true,
+      partner_ended_at: company.partner_ends_at
+    }), { headers: corsHeaders, status: 200 });
+  }
+}
+```
 
-## Parte 6: Integração com Stripe
+## Resumo de Arquivos
 
-### Edge Function para criar sessão de checkout
-Criar uma função que:
-1. Recebe o plano selecionado e tipo de cobrança (mensal/anual)
-2. Busca o preço correto na `saas_settings`
-3. Cria ou recupera o `stripe_customer_id` da empresa
-4. Gera sessão de checkout do Stripe
-5. Retorna URL para redirecionamento
+### Novos Arquivos
+1. `src/components/admin/PartnershipModal.tsx` - Modal de gestao de parceria
 
-### Webhook do Stripe
-Edge function para processar eventos:
-- `checkout.session.completed` - Ativar assinatura
-- `invoice.paid` - Renovação confirmada
-- `invoice.payment_failed` - Marcar como inadimplente
-- `customer.subscription.deleted` - Marcar como cancelado
+### Arquivos Modificados
+1. `src/components/admin/CompaniesTable.tsx` - Badges e acoes de parceiro
+2. `src/components/admin/CompanyDetailsModal.tsx` - Secao de info de parceria
+3. `src/hooks/useAdminCompanies.ts` - Funcoes de CRUD de parceria
+4. `supabase/functions/check-subscription/index.ts` - Verificacao de parceiro
+5. Migracao SQL para novos campos
 
-### Disparo de eventos para Pixels
-Quando uma assinatura for confirmada, disparar eventos de conversão para:
-- Meta: `Purchase`
-- Google: `conversion`
-- TikTok: `CompletePayment`
-
----
-
-## Ordem de Implementação
-
-1. **Migração do banco** - Adicionar colunas na `saas_settings` e criar `plan_features`
-2. **Hook `useSaasSettings`** - Atualizar para incluir novos campos
-3. **PlanPricingCard** - Refatorar para usar novos nomes (Inicial/Profissional/Franquias)
-4. **PlanFeaturesCard** - Criar componente de configuração de features
-5. **TrackingPixelsCard** - Criar componente de configuração de pixels
-6. **TrackingScripts** - Injetar scripts na aplicação
-7. **Edge Functions** - Criar funções de checkout e webhook do Stripe
-8. **Página de checkout** - Criar fluxo de assinatura no frontend
-
----
-
-## Seção Técnica
-
-### Arquivos a serem modificados
-- `src/pages/admin/AdminSettings.tsx` - Adicionar novos cards
-- `src/components/admin/PlanPricingCard.tsx` - Refatorar nomes dos planos
-- `src/hooks/useSaasSettings.ts` - Adicionar novos campos
-
-### Arquivos a serem criados
-- `src/components/admin/PlanFeaturesCard.tsx`
-- `src/components/admin/TrackingPixelsCard.tsx`
-- `src/components/TrackingScripts.tsx`
-- `supabase/functions/create-checkout-session/index.ts`
-- `supabase/functions/stripe-webhook/index.ts`
-
-### Migrações SQL necessárias
-1. Adicionar colunas de pixels e preços anuais em `saas_settings`
-2. Criar tabela `plan_features` com RLS para super_admin
-3. Inserir dados iniciais das features
-
-### Dependências
-- Stripe Secret Key configurada nos secrets do backend
-- IDs dos Pixels de cada plataforma (fornecidos por você)
-
+### Ordem de Implementacao
+1. Migracao SQL (adicionar campos)
+2. Atualizar hook useAdminCompanies
+3. Criar PartnershipModal
+4. Atualizar CompaniesTable
+5. Atualizar CompanyDetailsModal
+6. Atualizar check-subscription
