@@ -36,9 +36,12 @@ export function useAdminCompanies() {
       // Fetch owner emails
       let ownerEmails: Record<string, string> = {};
       try {
-        const { data: emailData } = await supabase.functions.invoke("get-company-owners");
-        if (emailData?.ownerEmails) {
-          ownerEmails = emailData.ownerEmails;
+        const response = await supabase.functions.invoke("get-company-owners");
+        console.log("get-company-owners response:", response);
+        if (response.error) {
+          console.error("Edge function error:", response.error);
+        } else if (response.data?.ownerEmails) {
+          ownerEmails = response.data.ownerEmails;
         }
       } catch (e) {
         console.error("Failed to fetch owner emails:", e);
