@@ -8,8 +8,12 @@ import { TestimonialsSection } from "@/components/landing/TestimonialsSection";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { Footer } from "@/components/landing/Footer";
 import { SEOHead } from "@/components/seo/SEOHead";
+import { usePageTracking } from "@/hooks/usePageTracking";
 
 export default function LandingPage() {
+  // Track page visits for conversion analytics
+  usePageTracking("/");
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <SEOHead 

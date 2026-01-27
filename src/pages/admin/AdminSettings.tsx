@@ -1,0 +1,24 @@
+import { AdminLayout } from "@/components/admin/AdminLayout";
+import { StripeSettingsCard } from "@/components/admin/StripeSettingsCard";
+import { PlanPricingCard } from "@/components/admin/PlanPricingCard";
+import { MaintenanceCard } from "@/components/admin/MaintenanceCard";
+
+export default function AdminSettings() {
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Configurações</h1>
+          <p className="text-slate-400">Configurações globais do SaaS</p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <StripeSettingsCard />
+          <PlanPricingCard />
+        </div>
+        
+        <MaintenanceCard />
+      </div>
+    </AdminLayout>
+  );
+}

@@ -702,8 +702,17 @@ export type Database = {
           evolution_api_key: string | null
           evolution_instance_name: string | null
           id: string
+          is_blocked: boolean | null
+          last_login_at: string | null
+          monthly_price: number | null
           name: string
           owner_user_id: string
+          plan_status: string | null
+          plan_type: string | null
+          signup_source: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -711,8 +720,17 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_instance_name?: string | null
           id?: string
+          is_blocked?: boolean | null
+          last_login_at?: string | null
+          monthly_price?: number | null
           name: string
           owner_user_id: string
+          plan_status?: string | null
+          plan_type?: string | null
+          signup_source?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -720,8 +738,17 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_instance_name?: string | null
           id?: string
+          is_blocked?: boolean | null
+          last_login_at?: string | null
+          monthly_price?: number | null
           name?: string
           owner_user_id?: string
+          plan_status?: string | null
+          plan_type?: string | null
+          signup_source?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -776,6 +803,53 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedbacks: {
+        Row: {
+          admin_notes: string | null
+          company_id: string | null
+          created_at: string | null
+          id: string
+          message: string
+          priority: string | null
+          resolved_at: string | null
+          status: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          message: string
+          priority?: string | null
+          resolved_at?: string | null
+          status?: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          message?: string
+          priority?: string | null
+          resolved_at?: string | null
+          status?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedbacks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -879,6 +953,36 @@ export type Database = {
           name?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      page_visits: {
+        Row: {
+          id: string
+          ip_hash: string | null
+          page_path: string
+          referrer: string | null
+          session_id: string | null
+          user_agent: string | null
+          visited_at: string | null
+        }
+        Insert: {
+          id?: string
+          ip_hash?: string | null
+          page_path: string
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          visited_at?: string | null
+        }
+        Update: {
+          id?: string
+          ip_hash?: string | null
+          page_path?: string
+          referrer?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          visited_at?: string | null
         }
         Relationships: []
       }
@@ -1072,6 +1176,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      saas_settings: {
+        Row: {
+          default_trial_days: number | null
+          elite_plan_price: number | null
+          empire_plan_price: number | null
+          id: string
+          maintenance_message: string | null
+          maintenance_mode: boolean | null
+          professional_plan_price: number | null
+          stripe_live_publishable_key: string | null
+          stripe_live_secret_key: string | null
+          stripe_mode: string | null
+          stripe_test_publishable_key: string | null
+          stripe_test_secret_key: string | null
+          stripe_webhook_secret: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          default_trial_days?: number | null
+          elite_plan_price?: number | null
+          empire_plan_price?: number | null
+          id?: string
+          maintenance_message?: string | null
+          maintenance_mode?: boolean | null
+          professional_plan_price?: number | null
+          stripe_live_publishable_key?: string | null
+          stripe_live_secret_key?: string | null
+          stripe_mode?: string | null
+          stripe_test_publishable_key?: string | null
+          stripe_test_secret_key?: string | null
+          stripe_webhook_secret?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          default_trial_days?: number | null
+          elite_plan_price?: number | null
+          empire_plan_price?: number | null
+          id?: string
+          maintenance_message?: string | null
+          maintenance_mode?: boolean | null
+          professional_plan_price?: number | null
+          stripe_live_publishable_key?: string | null
+          stripe_live_secret_key?: string | null
+          stripe_mode?: string | null
+          stripe_test_publishable_key?: string | null
+          stripe_test_secret_key?: string | null
+          stripe_webhook_secret?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       services: {
         Row: {
@@ -1306,6 +1464,7 @@ export type Database = {
       }
       increment_campaign_failed: { Args: { cid: string }; Returns: undefined }
       increment_campaign_sent: { Args: { cid: string }; Returns: undefined }
+      is_super_admin: { Args: never; Returns: boolean }
       user_owns_company: { Args: { p_company_id: string }; Returns: boolean }
       user_owns_unit: { Args: { unit_id: string }; Returns: boolean }
     }

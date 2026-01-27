@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { SupportChatWidget } from "@/components/support/SupportChatWidget";
+import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -23,6 +24,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </SidebarInset>
       </div>
       <SupportChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <FeedbackButton />
     </SidebarProvider>
   );
 }

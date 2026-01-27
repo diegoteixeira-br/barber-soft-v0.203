@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { SuperAdminGuard } from "@/components/auth/SuperAdminGuard";
 import { UnitProvider } from "@/contexts/UnitContext";
 import LandingPage from "./pages/LandingPage";
 import Auth from "./pages/Auth";
@@ -23,6 +24,12 @@ import Marketing from "./pages/Marketing";
 import Relatorios from "./pages/Relatorios";
 import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
+
+// Admin pages
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminCompanies from "./pages/admin/AdminCompanies";
+import AdminFeedbacks from "./pages/admin/AdminFeedbacks";
+import AdminSettings from "./pages/admin/AdminSettings";
 
 // Institutional pages
 import API from "./pages/institucional/API";
@@ -78,6 +85,12 @@ const App = () => (
             <Route path="/auth/barber" element={<BarberAuth />} />
             <Route path="/barbeiro" element={<BarberDashboard />} />
             <Route path="/convite/:token" element={<BarberInvite />} />
+            
+            {/* Super Admin Routes */}
+            <Route path="/admin" element={<SuperAdminGuard><AdminDashboard /></SuperAdminGuard>} />
+            <Route path="/admin/companies" element={<SuperAdminGuard><AdminCompanies /></SuperAdminGuard>} />
+            <Route path="/admin/feedbacks" element={<SuperAdminGuard><AdminFeedbacks /></SuperAdminGuard>} />
+            <Route path="/admin/settings" element={<SuperAdminGuard><AdminSettings /></SuperAdminGuard>} />
             
             {/* Institutional Pages */}
             <Route path="/api" element={<API />} />
