@@ -8,8 +8,6 @@ import {
   LogOut,
   Shield
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 
 const adminNavItems = [
   { 
@@ -38,10 +36,8 @@ const adminNavItems = [
 export function AdminSidebar() {
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success("Logout realizado com sucesso");
-    navigate("/");
+  const handleExitAdmin = () => {
+    navigate("/dashboard");
   };
 
   return (
@@ -82,11 +78,11 @@ export function AdminSidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-slate-700">
         <button
-          onClick={handleLogout}
+          onClick={handleExitAdmin}
           className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
         >
           <LogOut className="h-5 w-5" />
-          Sair
+          Voltar ao Sistema
         </button>
       </div>
     </aside>
