@@ -45,7 +45,7 @@ serve(async (req) => {
     // Get the user's company
     const { data: company, error: companyError } = await supabaseAdmin
       .from("companies")
-      .select("id, stripe_customer_id, stripe_subscription_id")
+      .select("id, stripe_customer_id, stripe_subscription_id, plan_status")
       .eq("owner_user_id", user.id)
       .maybeSingle();
 
@@ -57,20 +57,57 @@ serve(async (req) => {
       throw new Error("No company found for this user");
     }
 
-    logStep("Company found", { companyId: company.id });
+    logStep("Company found", { companyId: company.id, planStatus: company.plan_status });
 
-    // Cancel Stripe subscription if exists
-    if (company.stripe_subscription_id) {
-      const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-      if (stripeKey) {
-        try {
-          const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-          await stripe.subscriptions.cancel(company.stripe_subscription_id);
-          logStep("Stripe subscription cancelled", { subscriptionId: company.stripe_subscription_id });
-        } catch (stripeError) {
-          logStep("Error cancelling Stripe subscription (continuing)", { error: stripeError });
-          // Continue with deletion even if Stripe cancellation fails
+    // CRITICAL: Cancel Stripe subscription IMMEDIATELY before deletion
+    // Using cancel_at_period_end: false to cancel immediately and prevent future charges
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (stripeKey && company.stripe_customer_id) {
+      try {
+        const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+        
+        // First, list all active subscriptions for this customer
+        const subscriptions = await stripe.subscriptions.list({
+          customer: company.stripe_customer_id,
+          status: "active",
+        });
+        
+        // Cancel all active subscriptions immediately
+        for (const subscription of subscriptions.data) {
+          await stripe.subscriptions.cancel(subscription.id, {
+            prorate: true,
+            invoice_now: false,
+          });
+          logStep("Stripe subscription cancelled immediately", { subscriptionId: subscription.id });
         }
+        
+        // Also check for subscriptions pending cancellation
+        const pendingCancelSubs = await stripe.subscriptions.list({
+          customer: company.stripe_customer_id,
+        });
+        
+        for (const subscription of pendingCancelSubs.data) {
+          if (subscription.status !== "canceled") {
+            try {
+              await stripe.subscriptions.cancel(subscription.id, {
+                prorate: true,
+                invoice_now: false,
+              });
+              logStep("Additional subscription cancelled", { subscriptionId: subscription.id });
+            } catch (e) {
+              logStep("Could not cancel subscription (may already be cancelled)", { subscriptionId: subscription.id });
+            }
+          }
+        }
+        
+        logStep("All Stripe subscriptions cancelled for customer", { customerId: company.stripe_customer_id });
+      } catch (stripeError) {
+        logStep("Error cancelling Stripe subscriptions", { error: String(stripeError) });
+        // We MUST NOT continue if we can't cancel the subscription for active plans
+        if (company.plan_status === "active") {
+          throw new Error("Não foi possível cancelar a assinatura no Stripe. Por favor, cancele a assinatura antes de excluir a conta.");
+        }
+        // For non-active plans, we can continue
       }
     }
 

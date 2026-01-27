@@ -45,7 +45,7 @@ serve(async (req) => {
     // Get company info including partner fields
     const { data: company, error: companyError } = await supabaseClient
       .from("companies")
-      .select("id, stripe_customer_id, plan_status, plan_type, trial_ends_at, is_partner, partner_ends_at")
+      .select("id, stripe_customer_id, stripe_subscription_id, plan_status, plan_type, trial_ends_at, is_partner, partner_ends_at")
       .eq("owner_user_id", user.id)
       .single();
 
@@ -142,15 +142,34 @@ serve(async (req) => {
       customer: company.stripe_customer_id,
       status: "active",
       limit: 1,
+      expand: ["data.items.data.price.product"]
     });
 
     const hasActiveSub = subscriptions.data.length > 0;
     let subscriptionEnd = null;
     let currentPlan = company.plan_type;
+    let priceAmount: number | null = null;
+    let priceInterval: string | null = null;
+    let productName: string | null = null;
+    let cancelAtPeriodEnd = false;
 
     if (hasActiveSub) {
       const subscription = subscriptions.data[0];
       subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+      cancelAtPeriodEnd = subscription.cancel_at_period_end;
+      
+      // Get price and product info
+      const priceItem = subscription.items.data[0]?.price;
+      if (priceItem) {
+        priceAmount = priceItem.unit_amount ? priceItem.unit_amount / 100 : null;
+        priceInterval = priceItem.recurring?.interval || null;
+        
+        // Get product name
+        const product = priceItem.product;
+        if (product && typeof product === 'object' && 'name' in product) {
+          productName = product.name as string;
+        }
+      }
       
       // Get plan from metadata if available
       if (subscription.metadata?.plan) {
@@ -160,7 +179,11 @@ serve(async (req) => {
       logStep("Active subscription found", { 
         subscriptionId: subscription.id, 
         endDate: subscriptionEnd,
-        plan: currentPlan
+        plan: currentPlan,
+        price: priceAmount,
+        interval: priceInterval,
+        productName,
+        cancelAtPeriodEnd
       });
 
       // Update company if needed
@@ -177,6 +200,33 @@ serve(async (req) => {
       }
     } else {
       logStep("No active subscription found");
+      
+      // Check for cancelled subscriptions that are still active until period end
+      const cancelledSubs = await stripe.subscriptions.list({
+        customer: company.stripe_customer_id,
+        limit: 1,
+        expand: ["data.items.data.price.product"]
+      });
+      
+      if (cancelledSubs.data.length > 0) {
+        const sub = cancelledSubs.data[0];
+        if (sub.cancel_at_period_end && sub.status === "active") {
+          subscriptionEnd = new Date(sub.current_period_end * 1000).toISOString();
+          cancelAtPeriodEnd = true;
+          
+          const priceItem = sub.items.data[0]?.price;
+          if (priceItem) {
+            priceAmount = priceItem.unit_amount ? priceItem.unit_amount / 100 : null;
+            priceInterval = priceItem.recurring?.interval || null;
+            const product = priceItem.product;
+            if (product && typeof product === 'object' && 'name' in product) {
+              productName = product.name as string;
+            }
+          }
+          
+          logStep("Subscription cancelling at period end", { subscriptionEnd });
+        }
+      }
     }
 
     return new Response(JSON.stringify({
@@ -184,7 +234,12 @@ serve(async (req) => {
       plan_status: hasActiveSub ? "active" : company.plan_status,
       plan_type: currentPlan,
       subscription_end: subscriptionEnd,
-      trial_ends_at: company.trial_ends_at
+      trial_ends_at: company.trial_ends_at,
+      price_amount: priceAmount,
+      price_interval: priceInterval,
+      product_name: productName,
+      cancel_at_period_end: cancelAtPeriodEnd,
+      has_stripe_customer: !!company.stripe_customer_id
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

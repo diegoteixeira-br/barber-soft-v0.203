@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -14,7 +15,6 @@ import {
   CreditCard, 
   Calendar, 
   ArrowUpCircle, 
-  ArrowDownCircle, 
   XCircle,
   CheckCircle,
   Clock,
@@ -23,9 +23,10 @@ import {
   Loader2,
   Zap,
   Building2,
-  Users,
   Infinity,
-  Shield
+  Shield,
+  Receipt,
+  AlertCircle
 } from "lucide-react";
 import {
   AlertDialog,
@@ -69,9 +70,12 @@ const planDetails = {
   },
 };
 
-const getStatusBadge = (status: string | null, isSuperAdmin: boolean = false) => {
+const getStatusBadge = (status: string | null, isSuperAdmin: boolean = false, isCancelling: boolean = false) => {
   if (isSuperAdmin) {
     return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Vitalício</Badge>;
+  }
+  if (isCancelling) {
+    return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Cancelando</Badge>;
   }
   switch (status) {
     case "trial":
@@ -85,23 +89,50 @@ const getStatusBadge = (status: string | null, isSuperAdmin: boolean = false) =>
     case "partner":
       return <Badge className="bg-gold/20 text-gold border-gold/30">Parceiro</Badge>;
     default:
-      return <Badge variant="secondary">Desconhecido</Badge>;
+      return <Badge variant="secondary">Sem plano</Badge>;
   }
 };
 
 export default function Assinatura() {
-  const { status, isLoading, openCustomerPortal, startCheckout, isTrialing, isPartner, daysRemaining } = useSubscription();
+  const { 
+    status, 
+    isLoading, 
+    isPortalLoading,
+    openCustomerPortal, 
+    startCheckout, 
+    isTrialing, 
+    isPartner, 
+    daysRemaining,
+    isCancelling,
+    hasStripeCustomer
+  } = useSubscription();
   const { isSuperAdmin, isLoading: isSuperAdminLoading } = useSuperAdmin();
-  const [isPortalLoading, setIsPortalLoading] = useState(false);
+  const { toast } = useToast();
   const [isUpgrading, setIsUpgrading] = useState<string | null>(null);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   const currentPlan = status?.plan_type ? planDetails[status.plan_type] : null;
   const PlanIcon = isSuperAdmin ? Shield : (currentPlan?.icon || Crown);
 
   const handleOpenPortal = async () => {
-    setIsPortalLoading(true);
-    await openCustomerPortal();
-    setIsPortalLoading(false);
+    const url = await openCustomerPortal();
+    if (url) {
+      toast({
+        title: "Portal aberto",
+        description: "Você foi redirecionado para o portal de gerenciamento.",
+      });
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    const url = await openCustomerPortal();
+    if (url) {
+      toast({
+        title: "Cancelamento",
+        description: "No portal Stripe, clique em 'Cancelar plano' para confirmar o cancelamento.",
+      });
+    }
+    setIsCancelDialogOpen(false);
   };
 
   const handleUpgrade = async (plan: string) => {
@@ -113,6 +144,26 @@ export default function Assinatura() {
   const trialProgress = isTrialing && daysRemaining !== null 
     ? ((7 - daysRemaining) / 7) * 100 
     : 0;
+
+  // Format price display
+  const getPriceDisplay = () => {
+    if (status?.price_amount) {
+      const interval = status.price_interval === "year" ? "/ano" : "/mês";
+      return `R$ ${status.price_amount.toFixed(2).replace('.', ',')}${interval}`;
+    }
+    if (currentPlan) {
+      return `R$ ${currentPlan.monthlyPrice}/mês`;
+    }
+    return null;
+  };
+
+  // Format next billing date
+  const getNextBillingDate = () => {
+    if (status?.subscription_end) {
+      return format(new Date(status.subscription_end), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    }
+    return null;
+  };
 
   if (isLoading || isSuperAdminLoading) {
     return (
@@ -184,6 +235,35 @@ export default function Assinatura() {
           </Card>
         )}
 
+        {/* Cancelling Alert */}
+        {!isSuperAdmin && isCancelling && status?.subscription_end && (
+          <Card className="border-orange-500/30 bg-orange-500/5">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-full bg-orange-500/20">
+                  <AlertCircle className="h-6 w-6 text-orange-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-orange-400">Assinatura Cancelada</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Sua assinatura será encerrada em {getNextBillingDate()}. 
+                    Você pode reativar a qualquer momento antes desta data.
+                  </p>
+                  <Button 
+                    className="mt-3" 
+                    variant="outline"
+                    onClick={handleOpenPortal}
+                    disabled={isPortalLoading}
+                  >
+                    {isPortalLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Reativar Assinatura
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Partner Status */}
         {!isSuperAdmin && isPartner && (
           <Card className="border-gold/30 bg-gold/5">
@@ -230,7 +310,7 @@ export default function Assinatura() {
                   <PlanIcon className={`h-5 w-5 ${isSuperAdmin ? 'text-purple-500' : (currentPlan?.color || 'text-gold')}`} />
                   Plano Atual
                 </CardTitle>
-                {getStatusBadge(status?.plan_status, isSuperAdmin)}
+                {getStatusBadge(status?.plan_status, isSuperAdmin, isCancelling)}
               </div>
               <CardDescription>Detalhes da sua assinatura</CardDescription>
             </CardHeader>
@@ -277,26 +357,48 @@ export default function Assinatura() {
                     </ul>
                   </div>
                 </>
-              ) : currentPlan ? (
+              ) : status?.plan_status === "active" || isCancelling ? (
                 <>
-                  <div className={`p-4 rounded-lg ${currentPlan.bgColor}`}>
+                  <div className={`p-4 rounded-lg ${currentPlan?.bgColor || 'bg-gold/10'}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className={`text-xl font-bold ${currentPlan.color}`}>
-                          {currentPlan.name}
+                        <h3 className={`text-xl font-bold ${currentPlan?.color || 'text-gold'}`}>
+                          {status?.product_name || currentPlan?.name || 'Plano Ativo'}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          R$ {currentPlan.monthlyPrice}/mês
+                          {getPriceDisplay()}
                         </p>
                       </div>
-                      <currentPlan.icon className={`h-10 w-10 ${currentPlan.color} opacity-50`} />
+                      {currentPlan && <currentPlan.icon className={`h-10 w-10 ${currentPlan.color} opacity-50`} />}
                     </div>
                   </div>
+
+                  {/* Billing Info */}
+                  {status?.subscription_end && (
+                    <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {isCancelling ? 'Acesso até:' : 'Próxima cobrança:'}
+                        </span>
+                        <span className="font-medium">{getNextBillingDate()}</span>
+                      </div>
+                      {status?.price_amount && !isCancelling && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground flex items-center gap-2">
+                            <CreditCard className="h-4 w-4" />
+                            Valor:
+                          </span>
+                          <span className="font-medium">{getPriceDisplay()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Recursos inclusos:</p>
                     <ul className="space-y-1">
-                      {currentPlan.features.map((feature, index) => (
+                      {currentPlan?.features.map((feature, index) => (
                         <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
                           <CheckCircle className="h-4 w-4 text-green-500" />
                           {feature}
@@ -328,148 +430,160 @@ export default function Assinatura() {
                 <CardDescription>Gerencie pagamentos e faturas</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-between"
-                  onClick={handleOpenPortal}
-                  disabled={isPortalLoading || !currentPlan}
-                >
-                  <span className="flex items-center gap-2">
-                    {isPortalLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
+                {/* Billing Management Buttons - Only show if has Stripe customer */}
+                {hasStripeCustomer && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-between"
+                      onClick={handleOpenPortal}
+                      disabled={isPortalLoading}
+                    >
+                      <span className="flex items-center gap-2">
+                        {isPortalLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="h-4 w-4" />
+                        )}
+                        Gerenciar Método de Pagamento
+                      </span>
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-between"
+                      onClick={handleOpenPortal}
+                      disabled={isPortalLoading}
+                    >
+                      <span className="flex items-center gap-2">
+                        {isPortalLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Receipt className="h-4 w-4" />
+                        )}
+                        Ver Histórico de Faturas
+                      </span>
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Ações da Assinatura</p>
+                  
+                  {/* Upgrade Button - for active subscriptions not on highest plan */}
+                  {(status?.plan_status === "active" && status?.plan_type !== "franquias" && !isCancelling) && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start gap-2 text-green-500 hover:text-green-400 hover:bg-green-500/10">
+                          <ArrowUpCircle className="h-4 w-4" />
+                          Fazer Upgrade
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Fazer Upgrade de Plano</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Escolha o novo plano para fazer upgrade. Você será redirecionado ao portal de pagamento.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="grid gap-3 py-4">
+                          {Object.entries(planDetails)
+                            .filter(([key]) => {
+                              const order = ["inicial", "profissional", "franquias"];
+                              return order.indexOf(key) > order.indexOf(status?.plan_type || "");
+                            })
+                            .map(([key, plan]) => (
+                              <Button
+                                key={key}
+                                variant="outline"
+                                className="justify-between"
+                                onClick={() => handleUpgrade(key)}
+                                disabled={isUpgrading === key}
+                              >
+                                <span className="flex items-center gap-2">
+                                  {isUpgrading === key ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <plan.icon className={`h-4 w-4 ${plan.color}`} />
+                                  )}
+                                  {plan.name}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  R$ {plan.monthlyPrice}/mês
+                                </span>
+                              </Button>
+                            ))}
+                        </div>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+
+                  {/* Cancel Button - Visible for active subscriptions that are not already cancelling */}
+                  {status?.plan_status === "active" && !isPartner && !isCancelling && (
+                    <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start gap-2 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                          <XCircle className="h-4 w-4" />
+                          Cancelar Assinatura
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-500" />
+                            Cancelar Assinatura
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="space-y-3">
+                            <p>
+                              Tem certeza que deseja cancelar sua assinatura? Ao confirmar:
+                            </p>
+                            <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                              <li>Você manterá acesso até o fim do período atual</li>
+                              <li>Não haverá cobranças futuras após o período</li>
+                              <li>Seus dados serão mantidos por 30 dias</li>
+                              <li>Você pode reativar a qualquer momento</li>
+                            </ul>
+                            <p className="text-sm font-medium text-orange-400">
+                              Você será redirecionado ao portal Stripe para confirmar o cancelamento.
+                            </p>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Manter Assinatura</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleCancelSubscription}
+                            className="bg-red-500 hover:bg-red-600"
+                          >
+                            {isPortalLoading ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : null}
+                            Confirmar Cancelamento
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+
+                  {/* Choose Plan Button - Visible for trial/cancelled/no plan */}
+                  {(!hasStripeCustomer || status?.plan_status === "trial" || status?.plan_status === "cancelled" || !status?.plan_status) && (
+                    <Button 
+                      className="w-full justify-start gap-2"
+                      onClick={() => window.location.href = "/escolher-plano"}
+                    >
                       <CreditCard className="h-4 w-4" />
-                    )}
-                    Gerenciar Método de Pagamento
-                  </span>
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-between"
-                  onClick={handleOpenPortal}
-                  disabled={isPortalLoading || !currentPlan}
-                >
-                  <span className="flex items-center gap-2">
-                    {isPortalLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Calendar className="h-4 w-4" />
-                    )}
-                    Ver Histórico de Faturas
-                  </span>
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Ações da Assinatura</p>
-                
-                {/* Upgrade Button */}
-                {currentPlan && status?.plan_type !== "franquias" && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start gap-2 text-green-500 hover:text-green-400 hover:bg-green-500/10">
-                        <ArrowUpCircle className="h-4 w-4" />
-                        Fazer Upgrade
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Fazer Upgrade de Plano</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Escolha o novo plano para fazer upgrade. Você será redirecionado ao portal de pagamento.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <div className="grid gap-3 py-4">
-                        {Object.entries(planDetails)
-                          .filter(([key]) => {
-                            const order = ["inicial", "profissional", "franquias"];
-                            return order.indexOf(key) > order.indexOf(status?.plan_type || "");
-                          })
-                          .map(([key, plan]) => (
-                            <Button
-                              key={key}
-                              variant="outline"
-                              className="justify-between"
-                              onClick={() => handleUpgrade(key)}
-                              disabled={isUpgrading === key}
-                            >
-                              <span className="flex items-center gap-2">
-                                <plan.icon className={`h-4 w-4 ${plan.color}`} />
-                                {plan.name}
-                              </span>
-                              <span className="text-muted-foreground">
-                                R$ {plan.monthlyPrice}/mês
-                              </span>
-                            </Button>
-                          ))}
-                      </div>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-
-                {/* Downgrade Button */}
-                {currentPlan && status?.plan_type !== "inicial" && (
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start gap-2 text-orange-500 hover:text-orange-400 hover:bg-orange-500/10"
-                    onClick={handleOpenPortal}
-                    disabled={isPortalLoading}
-                  >
-                    <ArrowDownCircle className="h-4 w-4" />
-                    Fazer Downgrade
-                  </Button>
-                )}
-
-                {/* Cancel Button - Visible for active subscriptions */}
-                {status?.plan_status === "active" && !isPartner && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start gap-2 text-red-500 hover:text-red-400 hover:bg-red-500/10">
-                        <XCircle className="h-4 w-4" />
-                        Cancelar Assinatura
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Cancelar Assinatura</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Tem certeza que deseja cancelar? Você perderá acesso a todas as funcionalidades premium 
-                          ao final do período já pago. Esta ação pode ser revertida até a data de expiração.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Manter Assinatura</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={handleOpenPortal}
-                          className="bg-red-500 hover:bg-red-600"
-                        >
-                          Confirmar Cancelamento
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-
-                {/* Choose Plan Button - Visible for trial/cancelled/no plan */}
-                {(!currentPlan || status?.plan_status === "trial" || status?.plan_status === "cancelled") && (
-                  <Button 
-                    className="w-full justify-start gap-2"
-                    onClick={() => window.location.href = "/escolher-plano"}
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Escolher um Plano
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      Escolher um Plano
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 

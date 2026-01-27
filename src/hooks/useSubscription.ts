@@ -9,11 +9,18 @@ export interface SubscriptionStatus {
   partner_ends_at: string | null;
   is_partner: boolean;
   days_remaining: number | null;
+  subscription_end: string | null;
+  price_amount: number | null;
+  price_interval: "month" | "year" | null;
+  product_name: string | null;
+  cancel_at_period_end: boolean;
+  has_stripe_customer: boolean;
 }
 
 export function useSubscription() {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPortalLoading, setIsPortalLoading] = useState(false);
   const { toast } = useToast();
 
   const checkSubscription = useCallback(async () => {
@@ -54,6 +61,12 @@ export function useSubscription() {
           partner_ends_at: data.partner_ends_at || null,
           is_partner: data.is_partner || false,
           days_remaining: daysRemaining,
+          subscription_end: data.subscription_end || null,
+          price_amount: data.price_amount || null,
+          price_interval: data.price_interval || null,
+          product_name: data.product_name || null,
+          cancel_at_period_end: data.cancel_at_period_end || false,
+          has_stripe_customer: data.has_stripe_customer || false,
         });
       }
     } catch (error) {
@@ -64,6 +77,7 @@ export function useSubscription() {
   }, []);
 
   const openCustomerPortal = async () => {
+    setIsPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal");
       
@@ -73,12 +87,14 @@ export function useSubscription() {
           description: "Não foi possível abrir o portal de assinatura",
           variant: "destructive",
         });
-        return;
+        return null;
       }
 
       if (data?.url) {
         window.open(data.url, "_blank");
+        return data.url;
       }
+      return null;
     } catch (error) {
       console.error("Error opening customer portal:", error);
       toast({
@@ -86,6 +102,9 @@ export function useSubscription() {
         description: "Erro ao acessar portal de assinatura",
         variant: "destructive",
       });
+      return null;
+    } finally {
+      setIsPortalLoading(false);
     }
   };
 
@@ -133,6 +152,7 @@ export function useSubscription() {
   return {
     status,
     isLoading,
+    isPortalLoading,
     checkSubscription,
     openCustomerPortal,
     startCheckout,
@@ -140,5 +160,7 @@ export function useSubscription() {
     isActive: status?.plan_status === "active" || status?.plan_status === "partner",
     isPartner: status?.is_partner || false,
     daysRemaining: status?.days_remaining,
+    isCancelling: status?.cancel_at_period_end || false,
+    hasStripeCustomer: status?.has_stripe_customer || false,
   };
 }
