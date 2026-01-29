@@ -72,53 +72,54 @@ const GENERIC_ERRORS = {
 // ============= PHONE NORMALIZATION UTILITIES =============
 // Gera variações de telefone para busca flexível (9º dígito)
 function getPhoneVariations(phone: string): string[] {
-  if (!phone) return [];
-  const variations: string[] = [];
-  
-  // Se tem 12 dígitos (55 + DDD + 8 dígitos locais), adicionar o 9º dígito
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return [];
+
+  // Padronizar para a forma com DDI quando possível (sem inventar dígitos)
+  const withCountry = (!digits.startsWith('55') && digits.length <= 11)
+    ? `55${digits}`
+    : digits;
+
+  const variations = new Set<string>();
+
+  // 12 dígitos com DDI (55 + DDD + 8 dígitos) => inserir o 9 após o DDD
   // Ex: 556599891722 -> 5565999891722
-  if (phone.length === 12 && phone.startsWith('55')) {
-    const ddd = phone.substring(2, 4);
-    const localNumber = phone.substring(4);
-    // Só adiciona 9 se o número local começa com 9 (indica celular sem 9º dígito)
-    if (localNumber.startsWith('9')) {
-      variations.push(`55${ddd}9${localNumber}`);
-    }
+  if (withCountry.length === 12 && withCountry.startsWith('55')) {
+    variations.add(`${withCountry.slice(0, 4)}9${withCountry.slice(4)}`);
   }
-  
-  // Se tem 13 dígitos com 9º dígito, tentar remover
+
+  // 13 dígitos com DDI (55 + DDD + 9 + 8 dígitos) => remover o 9 após o DDD
   // Ex: 5565999891722 -> 556599891722
-  if (phone.length === 13 && phone.startsWith('55')) {
-    const ddd = phone.substring(2, 4);
-    const localWithNine = phone.substring(4);
-    if (localWithNine.startsWith('9') && localWithNine.length === 9) {
-      variations.push(`55${ddd}${localWithNine.substring(1)}`);
-    }
+  if (withCountry.length === 13 && withCountry.startsWith('55') && withCountry.charAt(4) === '9') {
+    variations.add(`${withCountry.slice(0, 4)}${withCountry.slice(5)}`);
   }
-  
-  return variations;
+
+  // Retornar variações sem repetir o original
+  variations.delete(withCountry);
+  variations.delete(digits);
+  return Array.from(variations);
 }
 
 // Normaliza telefone para formato padrão brasileiro (13 dígitos)
 function normalizePhoneToStandard(phone: string): string {
-  if (!phone) return phone;
-  
-  // Se já tem 13 dígitos (55 + DDD + 9 dígitos), está ok
-  if (phone.length === 13 && phone.startsWith('55')) {
-    return phone;
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return digits;
+
+  const withCountry = (!digits.startsWith('55') && digits.length <= 11)
+    ? `55${digits}`
+    : digits;
+
+  // Já está no padrão esperado (55 + DDD + 9 dígitos)
+  if (withCountry.length === 13 && withCountry.startsWith('55')) {
+    return withCountry;
   }
-  
-  // Se tem 12 dígitos (55 + DDD + 8 dígitos), adicionar 9º dígito se for celular
-  if (phone.length === 12 && phone.startsWith('55')) {
-    const ddd = phone.substring(2, 4);
-    const localNumber = phone.substring(4);
-    // Celulares começam com 9 após o DDD
-    if (localNumber.startsWith('9')) {
-      return `55${ddd}9${localNumber}`;
-    }
+
+  // 12 dígitos (55 + DDD + 8 dígitos) => inserir o 9 após o DDD
+  if (withCountry.length === 12 && withCountry.startsWith('55')) {
+    return `${withCountry.slice(0, 4)}9${withCountry.slice(4)}`;
   }
-  
-  return phone;
+
+  return withCountry;
 }
 
 const corsHeaders = {
@@ -570,6 +571,8 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
   const rawPhone = body.telefone || body.client_phone;
   // Normalizar telefone - remover caracteres especiais para consistência
   const clientPhone = rawPhone?.replace(/\D/g, '') || null;
+  // Normalizar para padrão (preferencial) de busca/armazenamento
+  const normalizedClientPhone = clientPhone ? normalizePhoneToStandard(clientPhone) : null;
   const dateTime = body.data || body.datetime || body.date;
   const barberName = body.barbeiro_nome || body.professional;
   const serviceName = body.servico || body.service;
@@ -663,54 +666,47 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
 
   console.log(`Creating appointment: ${clientName} with ${barberName} for ${serviceName} at ${dateTime}`);
   console.log(`Unit timezone: ${finalTimezone}`);
-  console.log(`Normalized phone: ${clientPhone}`);
+  console.log(`Incoming phone digits: ${clientPhone}`);
+  console.log(`Normalized phone (standard): ${normalizedClientPhone}`);
   console.log(`Extra client data - birth_date: ${clientBirthDate}, notes: ${clientNotes}, tags: ${JSON.stringify(clientTags)}`);
 
   // === VERIFICAR/CRIAR CLIENTE ===
   let clientCreated = false;
   let clientData = null;
 
-  if (clientPhone) {
+  if (normalizedClientPhone) {
     // === BUSCA FLEXÍVEL DE CLIENTE ===
     let existingClient = null;
-    
-    // 1. BUSCA EXATA primeiro
-    const { data: exactMatch, error: clientFetchError } = await supabase
+
+    const phonesToTry = Array.from(
+      new Set(
+        [
+          normalizedClientPhone,
+          clientPhone,
+          ...getPhoneVariations(normalizedClientPhone),
+          ...(clientPhone ? getPhoneVariations(clientPhone) : []),
+        ].filter((p): p is string => typeof p === 'string' && p.length > 0)
+      )
+    );
+
+    console.log(`Buscando cliente por telefone (unit_id=${unit_id}). Telefones testados:`, phonesToTry);
+
+    const { data: phoneMatches, error: clientFetchError } = await supabase
       .from('clients')
-      .select('id, name, phone, birth_date, notes, tags, total_visits')
+      .select('id, name, phone, birth_date, notes, tags, total_visits, created_at')
       .eq('unit_id', unit_id)
-      .eq('phone', clientPhone)
-      .maybeSingle();
+      .in('phone', phonesToTry)
+      .order('created_at', { ascending: true })
+      .limit(2);
 
     if (clientFetchError) {
-      console.error('Error fetching client:', clientFetchError);
+      console.error('Error fetching client by phone variations:', clientFetchError);
     }
-    
-    existingClient = exactMatch;
 
-    // 2. Se não encontrou, tentar VARIAÇÕES de telefone (9º dígito)
-    if (!existingClient) {
-      const variations = getPhoneVariations(clientPhone);
-      console.log(`Cliente não encontrado com busca exata (${clientPhone}). Tentando ${variations.length} variações:`, variations);
-      
-      for (const variation of variations) {
-        const { data: foundClient, error: variationError } = await supabase
-          .from('clients')
-          .select('id, name, phone, birth_date, notes, tags, total_visits')
-          .eq('unit_id', unit_id)
-          .eq('phone', variation)
-          .maybeSingle();
-        
-        if (variationError) {
-          console.error(`Erro buscando variação ${variation}:`, variationError);
-          continue;
-        }
-        
-        if (foundClient) {
-          console.log(`✅ Cliente encontrado com variação ${variation}:`, foundClient.name);
-          existingClient = foundClient;
-          break;
-        }
+    if (phoneMatches && phoneMatches.length > 0) {
+      existingClient = phoneMatches[0];
+      if (phoneMatches.length > 1) {
+        console.warn('⚠️ Encontrados múltiplos clientes para o mesmo telefone/variações. Usando o mais antigo:', phoneMatches.map((c: any) => ({ id: c.id, name: c.name, phone: c.phone, created_at: c.created_at })));
       }
     }
 
@@ -720,14 +716,14 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
       clientData = existingClient;
     } else {
       // Criar novo cliente SOMENTE se realmente não existe
-      console.log(`Criando novo cliente: ${clientName} - ${clientPhone}`);
+      console.log(`Criando novo cliente: ${clientName} - ${normalizedClientPhone}`);
       const { data: newClient, error: clientCreateError } = await supabase
         .from('clients')
         .insert({
           unit_id,
           company_id: company_id || null,
           name: clientName,
-          phone: clientPhone,
+          phone: normalizedClientPhone,
           birth_date: clientBirthDate,
           notes: clientNotes,
           tags: clientTags,
@@ -883,7 +879,13 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
   const dependentBirthDate = body.dependent_birth_date || null;
   
   let dependentId: string | null = null;
-  let appointmentClientName = clientName; // Nome que vai aparecer no agendamento
+  // Se o cliente já existe, usar o nome do cadastro (não o nome enviado pelo WhatsApp)
+  let appointmentClientName = clientData?.name || clientName; // Nome que vai aparecer no agendamento
+
+  // Telefone do titular/responsável (preferir o telefone já cadastrado)
+  const appointmentResponsiblePhone = (clientData?.phone && clientData.phone.trim() !== '')
+    ? clientData.phone
+    : normalizedClientPhone;
   
   if (isDependent && dependentName && clientData?.id) {
     console.log(`Agendamento para dependente: "${dependentName}" (Titular: ${clientName})`);
@@ -948,7 +950,7 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
       barber_id: barber.id,
       service_id: selectedService.id,
       client_name: appointmentClientName, // Nome do dependente ou titular
-      client_phone: clientPhone || null, // Sempre telefone do titular (responsável)
+      client_phone: appointmentResponsiblePhone || null, // Sempre telefone do titular (responsável)
       client_birth_date: isDependent ? (dependentBirthDate || null) : (clientBirthDate || null),
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
@@ -974,10 +976,10 @@ async function handleCreate(supabase: any, body: any, corsHeaders: any) {
   // === ENVIO DE CONFIRMAÇÃO VIA WHATSAPP (não-bloqueante) ===
   const { evolution_instance_name, evolution_api_key } = body;
 
-  if (clientPhone && evolution_instance_name && evolution_api_key) {
+  if (appointmentResponsiblePhone && evolution_instance_name && evolution_api_key) {
     try {
       // Formatar telefone: adicionar 55 se necessário (apenas para envio)
-      let phoneForMessage = clientPhone.replace(/\D/g, '');
+      let phoneForMessage = appointmentResponsiblePhone.replace(/\D/g, '');
       if (!phoneForMessage.startsWith('55') && phoneForMessage.length <= 11) {
         phoneForMessage = '55' + phoneForMessage;
       }
