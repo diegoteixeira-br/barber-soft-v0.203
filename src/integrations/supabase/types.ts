@@ -1576,6 +1576,13 @@ export type Database = {
       increment_campaign_failed: { Args: { cid: string }; Returns: undefined }
       increment_campaign_sent: { Args: { cid: string }; Returns: undefined }
       is_super_admin: { Args: never; Returns: boolean }
+      recalculate_all_client_fidelity: {
+        Args: never
+        Returns: {
+          processed_clients: number
+          updated_clients: number
+        }[]
+      }
       sanitize_brazilian_phone: {
         Args: { p_unit_id?: string; raw_phone: string }
         Returns: string
