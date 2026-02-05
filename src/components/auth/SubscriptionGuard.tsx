@@ -18,7 +18,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
   const [isBlocked, setIsBlocked] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Pages that don't require subscription check
-  const exemptPaths = ["/escolher-plano", "/assinatura", "/admin"];
+  const exemptPaths = ["/assinatura", "/admin"];
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -154,7 +154,7 @@ export function SubscriptionGuard({ children }: SubscriptionGuardProps) {
             Seu período de teste gratuito acabou. Escolha um plano para continuar usando o sistema.
           </p>
           <div className="flex flex-col gap-2">
-            <Button onClick={() => navigate("/escolher-plano")}>
+            <Button onClick={() => navigate("/assinatura")}>
               Escolher um Plano
             </Button>
             <Button variant="outline" onClick={() => supabase.auth.signOut()}>

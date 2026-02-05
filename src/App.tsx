@@ -47,7 +47,7 @@ import WhatsAppPage from "./pages/institucional/WhatsAppPage";
 import Privacidade from "./pages/institucional/Privacidade";
 import Termos from "./pages/institucional/Termos";
 import LGPD from "./pages/institucional/LGPD";
-import EscolherPlano from "./pages/EscolherPlano";
+
 import ResetDeletionPassword from "./pages/ResetDeletionPassword";
 
 const queryClient = new QueryClient();
@@ -91,7 +91,6 @@ const App = () => (
             {/* Public Landing Page */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/escolher-plano" element={<EscolherPlano />} />
             
             {/* Barber Routes (separate auth flow) */}
             <Route path="/auth/barber" element={<BarberAuth />} />
